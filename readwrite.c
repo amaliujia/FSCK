@@ -8,7 +8,7 @@
 	 * author: Sky Dragon 
 	 */
 	#include "myfsck.h"
-
+	
 	#if defined(__FreeBSD__)
 	#define lseek64 lseek
 	#endif
@@ -155,15 +155,19 @@
 		char opt;
 		char *path;
 		int partitionNum = -1;
-
+		int ext2Num = -1;
+		int i;
 		
-		while((opt = getopt(argc, argv, "p:i:")) != -1){
+		while((opt = getopt(argc, argv, "p:i:f:")) != -1){
 			switch(opt){
 				case 'p':
 					partitionNum = atoi(optarg);	
 					break;
 				case 'i':
 					path = optarg;
+					break;
+				case 'f':
+					ext2Num = atoi(optarg);
 					break;
 				default:
 					printf("Correct usage:---");
@@ -176,18 +180,27 @@
 		}
 
 		checkPartition(partitionNum, path, !(partitionNum == -1));
-
-
-		PTE *ext2 = readPartitionEntity(&ptren, 1); 
-		if(ext2 == NULL){
-			errno = 1;
-			goto error;	
-		}
 		
-		partition *e = ext2->p;
-		setSuperBlockArguments(e);
+		if(ext2Num == -1){
+			goto done;
+		}else if(ext2Num == 0){
+
+		}else{
+        	PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
+        	if(ext2 == NULL){
+           	 errno = 1;
+           	 goto error;
+        	}
+	        partition *e = ext2->p;
+   		    setSuperBlockArguments(e);
+			ext2_check_inodes_bitmap(sublk);		
+			uchar bitmap[block_size];
+			readiNodeBitmap(e, bitmap);		
+			//pass one
+			checkDirectoryEntitie(e, bitmap);	
+		}
+	/*	
 		ext2_inode rootiNode;
-		int temp = 22;
 		rootiNode = getSectorNumOfiNode(2,  e);
 		for(i = 0; i < EXT2_N_BLOCKS; i++){
 			printf("%x ", rootiNode.i_block[i]);
@@ -195,7 +208,6 @@
 		unsigned char dirInfo[1024];
 		readBlock((size_t)rootiNode.i_block[0], dirInfo, e);	
 		ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo; 		
-		//printf("%s\n", dirEntry2->name);
 		char c[256] = "lions";
 		int lions = findiNodeOfDirectory(c, 256, dirEntry2);	
 		printf("%d\n", lions);
@@ -204,13 +216,36 @@
         dirEntry2 = (ext2_dir_entry_2 *)dirInfo;
 		strcpy(c, "tigers");
 		lions = findiNodeOfDirectory(c, 256, dirEntry2);
-        printf("%d\n", lions);
+        printf("%d\n", lions);*/
 	done:	
 		close(device);
 		return errno;
 	error:
 		goto done;
 	}
+
+void checkDirectoryEntitie(partition *e, uchar *bitmap){
+	int i;
+	for(i = 3; i < sublk->s_inodes_count; i++){
+		size_t bitbyte = (i - 1) / 8;
+		size_t bitoff = (i - 1) % 8;
+		char target = bitmap[bitbyte];
+		if((target >> (7 - bitoff)) & 0x1 == 0){
+			continue;
+		}
+		ext2_inode inode;			
+		inode = getSectorNumOfiNode(i,  e);
+		if(!isDirectory(inode.i_mode)){
+			continue;
+		}	
+		if(inode.i_block[0] == 0){
+			continue;
+		}
+        unsigned char dirInfo[block_size];
+        readBlock((size_t)inode.i_block[0], dirInfo, e);  
+		ext2_dir_entry_2* dirEntry2 = (ext2_dir_entry_2 *)dirInfo;
+	//	if(					
+}
 
 void checkPartition(int partitionNum, char *path, bool checkable){
 		unsigned char buf[sector_size_bytes];        
@@ -246,7 +281,6 @@ void checkPartition(int partitionNum, char *path, bool checkable){
 			if(pte->p->sys_ind == 0x05){ 
 			   base0x05 = pte->p->start_sect;
 			   nextsector = base0x05;
-				//printf("Got a ebr 0x%02X %d %d\n", pte->p->sys_ind, pte->p->start_sect, pte->p->nr_sects);
 			}else if(pte->p->sys_ind == 0x83){
 			   base0x83 = pte->p->start_sect; 
 			}
@@ -351,7 +385,7 @@ void checkPartition(int partitionNum, char *path, bool checkable){
 		memcpy(b, buf + localGroup * block_des, block_des);
 	}
 	
-	bool isDirectory(unsigned short imode){
+	bool inline isDirectory(unsigned short imode){
 		return ((imode & 0xf000) == 0x4000) ? 1 : 0;	
 	}
 
@@ -387,4 +421,15 @@ void checkPartition(int partitionNum, char *path, bool checkable){
         }
 		dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);	
 	}			
+}
+
+bool inline isDirectoryNameMatch(char *name, ext2_dir_entry_2 *entry){
+	if(strcmp(entry->name, name) == 0){
+         return true;
+    }
+	return false;
+}
+
+void readiNodeBitmap(partition *e, uchar *bitmap){
+	readBlock(INODE_BITMAP, bitmap, e);
 }
