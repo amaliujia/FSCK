@@ -186,14 +186,13 @@
 		}else if(ext2Num == 0){
 
 		}else{
-        	PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
+        	PTE *ext2 = readPartitionEntity(&ptren, 1);
         	if(ext2 == NULL){
            	 errno = 1;
            	 goto error;
         	}
 	        partition *e = ext2->p;
    		    setSuperBlockArguments(e);
-			ext2_check_inodes_bitmap(sublk);		
 			uchar bitmap[block_size];
 			readiNodeBitmap(e, bitmap);		
 			//pass one
@@ -225,7 +224,8 @@
 	}
 
 void checkDirectoryEntitie(partition *e, uchar *bitmap){
-	int i;
+	size_t i;
+	int errno = NORMAL;
 	for(i = 3; i < sublk->s_inodes_count; i++){
 		size_t bitbyte = (i - 1) / 8;
 		size_t bitoff = (i - 1) % 8;
@@ -243,8 +243,27 @@ void checkDirectoryEntitie(partition *e, uchar *bitmap){
 		}
         unsigned char dirInfo[block_size];
         readBlock((size_t)inode.i_block[0], dirInfo, e);  
-		ext2_dir_entry_2* dirEntry2 = (ext2_dir_entry_2 *)dirInfo;
-	//	if(					
+		// check . 
+		ext2_dir_entry_2* dotEntry = (ext2_dir_entry_2 *)dirInfo;
+		if(strcmp(dotEntry->name, ".") != 0){
+			errno = DIR_ENTRY_DOT_NOTEXIST; 
+		}else if(dotEntry->inode != i){
+			//if directry entry with "." has wrong inode num
+			errno = DIR_ENTRY_DOT_INODENUM;
+			printf("Entry '.' in inode (%zu) has invalid inode #: %zu. Fix? ", i, dotEntry->inode);
+			dotEntry->inode = i;
+			printf("yes\n");	
+		}
+		
+		ext2_dir_entry_2* ddotEntry = (ext2_dir_entry_2 *)(dirInfo + dotEntry->rec_len);
+		if(strcmp(dotEntry->name, ".") != 0){
+            errno = (errno == DIR_ENTRY_DOT_NOTEXIST) ? DIR_ENTRY_DOTS_NOTEXIST : DIR_ENTRY_DOUBLEDOT_NOTEXIST;
+        }else if(!isSupDirCorrect(ddotEntry, ddotEntry->inode, e)){
+			printf("Entry '..' in indoe (%zu) has invalid parent inode #: %zu. Fix? ", i, dotEntry->inode);
+			printf("no\n"); 	
+		}	
+	}
+			
 }
 
 void checkPartition(int partitionNum, char *path, bool checkable){
@@ -400,13 +419,13 @@ void checkPartition(int partitionNum, char *path, bool checkable){
 		ext2_inode i;
 		readiNode(blockId, localIndex, p, &i);
 		if(isDirectory(i.i_mode)){
-			printf("111111------\n");
+//			printf("111111------\n");
 		}
 		return i;
 	}
 
 // TODO: here bug exists. No promise on length of dir, may buffer overflow
-	int findiNodeOfDirectory(uchar *name, size_t nameSize, ext2_dir_entry_2 *dir){
+	int findiNodeOfDirectory(uchar *name, ext2_dir_entry_2 *dir){
 	while(true){
 		if(dir->file_type == 2){ 
 				//char n[512];
@@ -422,6 +441,34 @@ void checkPartition(int partitionNum, char *path, bool checkable){
 		dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);	
 	}			
 }
+
+bool inline isSupDirCorrect(ext2_dir_entry_2 *entry, size_t inodeNum, partition *e){
+		ext2_inode parentiNode =  getSectorNumOfiNode(inodeNum, e);
+		//just try direct blocks
+	   	size_t i;
+		size_t dataSize = 0;
+		for(i = 0; i < 12; i++){
+			if(parentiNode.i_block[i] == 0){
+				break;
+			}
+			dataSize += block_size;
+		}
+		if(dataSize == 0){
+			return false;
+		}
+		uchar buf[dataSize];
+		for(i = 0; i < 12; i++){
+            if(parentiNode.i_block[i] == 0){
+                break;
+            }
+			readBlock((size_t)parentiNode.i_block[i], buf + i * block_size, e); 
+		}
+		if(findiNodeOfDirectory(entry->name, (ext2_dir_entry_2 *)buf) == -1){
+			return false;
+		}		
+		return true;	
+}
+
 
 bool inline isDirectoryNameMatch(char *name, ext2_dir_entry_2 *entry){
 	if(strcmp(entry->name, name) == 0){

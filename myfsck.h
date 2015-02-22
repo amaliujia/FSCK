@@ -25,6 +25,11 @@
 #define MBR_READ 0x291
 #define MBR_PTRREAD 0x292	 
 #define ARG_WRONG 0x293
+#define DIR_ENTRY_DOT_NOTEXIST 0x294
+#define DIR_ENTRY_DOT_INODENUM 0x295
+#define DIR_ENTRY_DOUBLEDOT_NOTEXIST 0x296
+#define DIR_ENTRY_DOUBLEDOT_PARENTNUM 0x297
+#define DIR_ENTRY_DOTS_NOTEXIST 0x298
 
 #define INODE_BLOCKMAP 0x03
 #define INODE_BITMAP 0x04
@@ -74,6 +79,7 @@ static SuperBlock *sublk;
 //inline toolbox 
 bool inline isDirectory(unsigned short imode);
 bool inline isDirectoryNameMatch(char *name, ext2_dir_entry_2 *entry);
+bool inline isSupDirCorrect(ext2_dir_entry_2 *entry, size_t inodeNum, partition *e); 
 
 unsigned short getMagicNum(partition *p);
 size_t getiNodesPerGroup(partition *p);
@@ -81,13 +87,14 @@ ext2_inode getSectorNumOfiNode(size_t inode, partition *p);
 void readiNodeTable(size_t localGroup, size_t localIndex, unsigned char *buf);
 void setSuperBlockArguments(partition *p);
 void readBlock(size_t blockid, uchar *buf, partition *p);
-int findiNodeOfDirectory(uchar *name, size_t nameSize, ext2_dir_entry_2 *dir);
+int findiNodeOfDirectory(uchar *name, ext2_dir_entry_2 *dir);
 void print_sector (unsigned char *buf);
 void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into);
 void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from);
 PTE *readPartitionEntity(ptrEntities *ptren, int i);
 void readiNodeBitmap(partition *e, uchar *bitmap);
 
+// checker function
 void checkPartition(int partition, char *path, bool checkable); 
 void checkDirectoryEntities(partition *e, uchar *bitmap);
 
