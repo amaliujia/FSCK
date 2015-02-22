@@ -522,6 +522,8 @@ struct ext2_dir_entry_2 {
     char    name[EXT2_NAME_LEN];    /* File name */
 };
 
+typedef struct ext2_dir_entry_2 ext2_dir_entry_2;
+
 /*
  * Ext2 directory file types.  Only the low 3 bits are used.  The
  * other bits are reserved for now.

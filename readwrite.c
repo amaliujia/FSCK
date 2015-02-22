@@ -31,10 +31,10 @@
 	//print magic number of ext2
 	unsigned short getMagicNum(partition *p);
 	size_t getiNodesPerGroup(partition *p);
-	size_t getSectorNumOfiNode(size_t inode, partition *p);
+	ext2_inode getSectorNumOfiNode(size_t inode, partition *p);
 	void readiNodeTable(size_t localGroup, size_t localIndex, unsigned char *buf);
 	void setSuperBlockArguments(partition *p);
-
+	void readBlock(size_t blockid, uchar *buf, partition *p);
 	/* print_sector: print the contents of a buffer containing one sector.
 	 *
 	 * inputs:
@@ -270,9 +270,16 @@
 		
 		partition *e = ext2->p;
 		setSuperBlockArguments(e);
-
-		getSectorNumOfiNode(1, e);
-
+		ext2_inode rootiNode;
+		int temp = 22;
+		rootiNode = getSectorNumOfiNode(3,  e);
+		for(i = 0; i < EXT2_N_BLOCKS; i++){
+			printf("%x ", rootiNode.i_block[i]);
+		}
+		unsigned char dirInfo[1024];
+		readBlock((size_t)rootiNode.i_block[0], dirInfo, e);	
+		ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo; 		
+		//printf("%s\n", dirEntry2->name);	
 	done:	
 		close(device);
 		return errno;
@@ -321,7 +328,7 @@
 	}
 
 	void readiNode(size_t blockid, size_t localIndex, partition *p, ext2_inode *i){
-		size_t off = (localIndex + sublk->s_first_ino) * inode_size;
+		size_t off = (localIndex + sublk->s_first_ino - 1) * inode_size;
 		uchar buf[block_size];
 		size_t offId = off / block_size;
 		size_t offIndex = off % block_size;
@@ -329,14 +336,22 @@
 		memcpy(i, buf + offIndex , sizeof(ext2_inode));	
 	}	
 
+    void readBlock(size_t blockid, uchar *buf, partition *p){
+        read_sectors(p->start_sect + (blockid) * 2, 2, buf);
+    }
+
 	void readBlockGroupDes(size_t localGroup, GroupDes *b, partition *p){
 		unsigned char buf[block_size];
 		read_sectors(p->start_sect + 4, block_size / sector_size_bytes, buf);
 		//printf("size of gourp descriptor: %d,  %d  %d\n", sizeof(GroupDes), block_size / sector_size_bytes, localGroup);
 		memcpy(b, buf + localGroup * block_des, block_des);
 	}
+	
+	bool isDirectory(unsigned short imode){
+		return ((imode & 0xf000) == 0x4000) ? 1 : 0;	
+	}
 
-	size_t getSectorNumOfiNode(size_t inode, partition *p){
+	ext2_inode getSectorNumOfiNode(size_t inode, partition *p){
 		size_t inodesPerGourp = sublk->s_inodes_per_group;
 		size_t localGroup = (inode - 1) / inodesPerGourp;
 		size_t localIndex = (inode - 1) % inodesPerGourp;	
@@ -346,5 +361,8 @@
 //		printf("Block id: %zu\n", blockId);
 		ext2_inode i;
 		readiNode(blockId, localIndex, p, &i);
-		//return 1;
+		if(isDirectory(i.i_mode)){
+			printf("111111------\n");
+		}
+		return i;
 	}
