@@ -60,8 +60,27 @@ struct BlockGroupDes{
 typedef struct BlockGroupDes BlockGroupDes;
 
 typedef unsigned char  uchar; 
+
+    const unsigned int sector_size_bytes = 512;
+    const unsigned int block_size = 1024;
+    const unsigned int inode_table_size_bytes = 214 * 1024;
+    const unsigned int block_des = 32;
+    const unsigned int inode_size = 128;
+    static size_t blockSize = 0;
+    static SuperBlock *sublk;
+    
+    bool isDirectory(unsigned short imode);
+    unsigned short getMagicNum(partition *p);
+    size_t getiNodesPerGroup(partition *p);
+    ext2_inode getSectorNumOfiNode(size_t inode, partition *p);
+    void readiNodeTable(size_t localGroup, size_t localIndex, unsigned char *buf);
+    void setSuperBlockArguments(partition *p);
+    void readBlock(size_t blockid, uchar *buf, partition *p);
+    int findiNodeOfDirectory(uchar *name, size_t nameSize, ext2_dir_entry_2 *dir);
 void print_sector (unsigned char *buf);
 void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into);
 void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from);
 PTE *readPartitionEntity(ptrEntities *ptren, int i);
+void checkPartition(int partition, char *path, bool checkable); 
+
 #endif

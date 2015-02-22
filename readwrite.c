@@ -18,25 +18,11 @@
 	//extern int opterr;
 	extern char *optarg;
 	extern int optind, opterr, optop;
-	const unsigned int sector_size_bytes = 512;
-	const unsigned int block_size = 1024;
-	const unsigned int inode_table_size_bytes = 214 * 1024; 
-	const unsigned int block_des = 32;
-	const unsigned int inode_size = 128;
-	//static size_t blockSize = 0;
-	static SuperBlock *sublk;
 
 	static int device;  /* disk file descriptor */
 
-	//print magic number of ext2
-	bool isDirectory(unsigned short imode);
-	unsigned short getMagicNum(partition *p);
-	size_t getiNodesPerGroup(partition *p);
-	ext2_inode getSectorNumOfiNode(size_t inode, partition *p);
-	void readiNodeTable(size_t localGroup, size_t localIndex, unsigned char *buf);
-	void setSuperBlockArguments(partition *p);
-	void readBlock(size_t blockid, uchar *buf, partition *p);
-	int findiNodeOfDirectory(uchar *name, size_t nameSize, ext2_dir_entry_2 *dir); 
+	static ptrEntities ptren;
+
 	/* print_sector: print the contents of a buffer containing one sector.
 	 *
 	 * inputs:
@@ -165,18 +151,11 @@
 	int main (int argc, char **argv)
 	{
 		int errno = 0;
-		
-		unsigned char buf[sector_size_bytes];        
-		int the_sector;                     
-		ptrEntities ptren;
-		ptren.count = 0;
-		ptren.p = NULL;
-		int count = 0, i, j;
 
 		char opt;
 		char *path;
 		int partitionNum = -1;
-		bool isFindPartition = false;
+
 		
 		while((opt = getopt(argc, argv, "p:i:")) != -1){
 			switch(opt){
@@ -195,6 +174,52 @@
 			perror("Could not open device file");
 			exit(-1);
 		}
+
+		checkPartition(partitionNum, path, !(partitionNum == -1));
+
+
+		PTE *ext2 = readPartitionEntity(&ptren, 1); 
+		if(ext2 == NULL){
+			errno = 1;
+			goto error;	
+		}
+		
+		partition *e = ext2->p;
+		setSuperBlockArguments(e);
+		ext2_inode rootiNode;
+		int temp = 22;
+		rootiNode = getSectorNumOfiNode(2,  e);
+		for(i = 0; i < EXT2_N_BLOCKS; i++){
+			printf("%x ", rootiNode.i_block[i]);
+		}
+		unsigned char dirInfo[1024];
+		readBlock((size_t)rootiNode.i_block[0], dirInfo, e);	
+		ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo; 		
+		//printf("%s\n", dirEntry2->name);
+		char c[256] = "lions";
+		int lions = findiNodeOfDirectory(c, 256, dirEntry2);	
+		printf("%d\n", lions);
+		rootiNode = getSectorNumOfiNode(lions,  e);	
+        readBlock((size_t)rootiNode.i_block[0], dirInfo, e);
+        dirEntry2 = (ext2_dir_entry_2 *)dirInfo;
+		strcpy(c, "tigers");
+		lions = findiNodeOfDirectory(c, 256, dirEntry2);
+        printf("%d\n", lions);
+	done:	
+		close(device);
+		return errno;
+	error:
+		goto done;
+	}
+
+void checkPartition(int partitionNum, char *path, bool checkable){
+		unsigned char buf[sector_size_bytes];        
+		int the_sector;                     
+		// ptrEntities ptren;
+		ptren.count = 0;
+		ptren.p = NULL;
+		int count = 0, i, j;
+		bool isFindPartition = false;
 
 		the_sector = 0;
 	//    printf("Dumping sector %d:\n", the_sector);
@@ -261,42 +286,9 @@
 				break;
 			}
 		}
-		if(!isFindPartition)
+		if(!isFindPartition && checkable)
 			printf("-1\n");
-
-		PTE *ext2 = readPartitionEntity(&ptren, 1); 
-		if(ext2 == NULL){
-			errno = 1;
-			goto error;	
-		}
-		
-		partition *e = ext2->p;
-		setSuperBlockArguments(e);
-		ext2_inode rootiNode;
-		int temp = 22;
-		rootiNode = getSectorNumOfiNode(2,  e);
-		for(i = 0; i < EXT2_N_BLOCKS; i++){
-			printf("%x ", rootiNode.i_block[i]);
-		}
-		unsigned char dirInfo[1024];
-		readBlock((size_t)rootiNode.i_block[0], dirInfo, e);	
-		ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo; 		
-		//printf("%s\n", dirEntry2->name);
-		char c[256] = "lions";
-		int lions = findiNodeOfDirectory(c, 256, dirEntry2);	
-		printf("%d\n", lions);
-		rootiNode = getSectorNumOfiNode(lions,  e);	
-        readBlock((size_t)rootiNode.i_block[0], dirInfo, e);
-        dirEntry2 = (ext2_dir_entry_2 *)dirInfo;
-		strcpy(c, "tigers");
-		lions = findiNodeOfDirectory(c, 256, dirEntry2);
-        printf("%d\n", lions);
-	done:	
-		close(device);
-		return errno;
-	error:
-		goto done;
-	}
+}
 
 	PTE *readPartitionEntity(ptrEntities *ptren, int partitionNum){
 		PTE *p = NULL;
