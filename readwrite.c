@@ -29,12 +29,14 @@
 	static int device;  /* disk file descriptor */
 
 	//print magic number of ext2
+	bool isDirectory(unsigned short imode);
 	unsigned short getMagicNum(partition *p);
 	size_t getiNodesPerGroup(partition *p);
 	ext2_inode getSectorNumOfiNode(size_t inode, partition *p);
 	void readiNodeTable(size_t localGroup, size_t localIndex, unsigned char *buf);
 	void setSuperBlockArguments(partition *p);
 	void readBlock(size_t blockid, uchar *buf, partition *p);
+	int findiNodeOfDirectory(uchar *name, size_t nameSize, ext2_dir_entry_2 *dir); 
 	/* print_sector: print the contents of a buffer containing one sector.
 	 *
 	 * inputs:
@@ -272,14 +274,23 @@
 		setSuperBlockArguments(e);
 		ext2_inode rootiNode;
 		int temp = 22;
-		rootiNode = getSectorNumOfiNode(3,  e);
+		rootiNode = getSectorNumOfiNode(2,  e);
 		for(i = 0; i < EXT2_N_BLOCKS; i++){
 			printf("%x ", rootiNode.i_block[i]);
 		}
 		unsigned char dirInfo[1024];
 		readBlock((size_t)rootiNode.i_block[0], dirInfo, e);	
 		ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo; 		
-		//printf("%s\n", dirEntry2->name);	
+		//printf("%s\n", dirEntry2->name);
+		char c[256] = "lions";
+		int lions = findiNodeOfDirectory(c, 256, dirEntry2);	
+		printf("%d\n", lions);
+		rootiNode = getSectorNumOfiNode(lions,  e);	
+        readBlock((size_t)rootiNode.i_block[0], dirInfo, e);
+        dirEntry2 = (ext2_dir_entry_2 *)dirInfo;
+		strcpy(c, "tigers");
+		lions = findiNodeOfDirectory(c, 256, dirEntry2);
+        printf("%d\n", lions);
 	done:	
 		close(device);
 		return errno;
@@ -328,7 +339,8 @@
 	}
 
 	void readiNode(size_t blockid, size_t localIndex, partition *p, ext2_inode *i){
-		size_t off = (localIndex + sublk->s_first_ino - 1) * inode_size;
+		//size_t off = (localIndex + sublk->s_first_ino - 1) * inode_size;
+		size_t off = (localIndex) * inode_size;
 		uchar buf[block_size];
 		size_t offId = off / block_size;
 		size_t offIndex = off % block_size;
@@ -366,3 +378,21 @@
 		}
 		return i;
 	}
+
+// TODO: here bug exists. No promise on length of dir, may buffer overflow
+	int findiNodeOfDirectory(uchar *name, size_t nameSize, ext2_dir_entry_2 *dir){
+	while(true){
+		if(dir->file_type == 2){ 
+				//char n[512];
+				//n = dir->name;
+				//memcpy(n, dir->name, dir->name_len);
+				printf("%s\n", dir->name);
+				if(strcmp(dir->name, name) == 0){
+					return dir->inode;		
+				}
+		}else if(dir->rec_len == 0){
+                    return -1;
+        }
+		dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);	
+	}			
+}
