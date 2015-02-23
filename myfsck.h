@@ -97,5 +97,5 @@ void readiNodeBitmap(partition *e, uchar *bitmap);
 // checker function
 void checkPartition(int partition, char *path, bool checkable); 
 void checkDirectoryEntities(partition *e, uchar *bitmap);
-
+bool checkUnreferenceNode(partition *e, uchar *bitmap, size_t inodeNum);
 #endif

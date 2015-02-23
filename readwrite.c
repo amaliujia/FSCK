@@ -87,119 +87,119 @@ void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into)
 
 	sector_offset = start_sector * sector_size_bytes;
 
-		if ((lret = lseek64(device, sector_offset, SEEK_SET)) != sector_offset) {
-			fprintf(stderr, "Seek to position %"PRId64" failed: "
-					"returned %"PRId64"\n", sector_offset, lret);
-			exit(-1);
-		}
-
-		bytes_to_read = sector_size_bytes * num_sectors;
-
-		if ((ret = read(device, into, bytes_to_read)) != bytes_to_read) {
-			fprintf(stderr, "Read sector %"PRId64" length %d failed: "
-					"returned %"PRId64"\n", start_sector, num_sectors, (long long)ret);
-			exit(-1);
-		}
+	if ((lret = lseek64(device, sector_offset, SEEK_SET)) != sector_offset) {
+		fprintf(stderr, "Seek to position %"PRId64" failed: "
+				"returned %"PRId64"\n", sector_offset, lret);
+		exit(-1);
 	}
 
+	bytes_to_read = sector_size_bytes * num_sectors;
 
-	/* write_sectors: write a buffer into a specified number of sectors.
-	 *
-	 * inputs:
-	 *   int64 start_sector: the starting sector number to write.
-	 *                	sector numbering starts with 0.
-	 *   int numsectors: the number of sectors to write.  must be >= 1.
-	 *   void *from: the requested number of sectors are copied from here.
-	 *
-	 * outputs:
-	 *   int device [GLOBAL]: the disk into which to write.
-	 *
-	 * modifies:
-	 *   int device [GLOBAL]
-	 */
-	void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from)
-	{
-		ssize_t ret;
-		int64_t lret;
-		int64_t sector_offset;
-		ssize_t bytes_to_write;
+	if ((ret = read(device, into, bytes_to_read)) != bytes_to_read) {
+		fprintf(stderr, "Read sector %"PRId64" length %d failed: "
+				"returned %"PRId64"\n", start_sector, num_sectors, (long long)ret);
+		exit(-1);
+	}
+}
 
-		if (num_sectors == 1) {
-			printf("Reading sector  %"PRId64"\n", start_sector);
-		} else {
-			printf("Reading sectors %"PRId64"--%"PRId64"\n",
-				   start_sector, start_sector + (num_sectors - 1));
-		}
 
-		sector_offset = start_sector * sector_size_bytes;
+/* write_sectors: write a buffer into a specified number of sectors.
+ *
+ * inputs:
+ *   int64 start_sector: the starting sector number to write.
+ *                	sector numbering starts with 0.
+ *   int numsectors: the number of sectors to write.  must be >= 1.
+ *   void *from: the requested number of sectors are copied from here.
+ *
+ * outputs:
+ *   int device [GLOBAL]: the disk into which to write.
+ *
+ * modifies:
+ *   int device [GLOBAL]
+ */
+void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from)
+{
+	ssize_t ret;
+	int64_t lret;
+	int64_t sector_offset;
+	ssize_t bytes_to_write;
 
-		if ((lret = lseek64(device, sector_offset, SEEK_SET)) != sector_offset) {
-			fprintf(stderr, "Seek to position %"PRId64" failed: "
-					"returned %"PRId64"\n", sector_offset, lret);
-			exit(-1);
-		}
-
-		bytes_to_write = sector_size_bytes * num_sectors;
-
-		if ((ret = write(device, from, bytes_to_write)) != bytes_to_write) {
-			fprintf(stderr, "Write sector %"PRId64" length %d failed: "
-					"returned %"PRId64"\n", start_sector, num_sectors, (long long)ret);
-			exit(-1);
-		}
+	if (num_sectors == 1) {
+		printf("Reading sector  %"PRId64"\n", start_sector);
+	} else {
+		printf("Reading sectors %"PRId64"--%"PRId64"\n",
+			   start_sector, start_sector + (num_sectors - 1));
 	}
 
-	int main (int argc, char **argv)
-	{
-		int errno = 0;
+	sector_offset = start_sector * sector_size_bytes;
 
-		char opt;
-		char *path;
-		int partitionNum = -1;
-		int ext2Num = -1;
-		int i;
-		
-		while((opt = getopt(argc, argv, "p:i:f:")) != -1){
-			switch(opt){
-				case 'p':
-					partitionNum = atoi(optarg);	
-					break;
-				case 'i':
-					path = optarg;
-					break;
-				case 'f':
-					ext2Num = atoi(optarg);
-					break;
-				default:
-					printf("Correct usage:---");
-					break;
-			}
+	if ((lret = lseek64(device, sector_offset, SEEK_SET)) != sector_offset) {
+		fprintf(stderr, "Seek to position %"PRId64" failed: "
+				"returned %"PRId64"\n", sector_offset, lret);
+		exit(-1);
+	}
+
+	bytes_to_write = sector_size_bytes * num_sectors;
+
+	if ((ret = write(device, from, bytes_to_write)) != bytes_to_write) {
+		fprintf(stderr, "Write sector %"PRId64" length %d failed: "
+				"returned %"PRId64"\n", start_sector, num_sectors, (long long)ret);
+		exit(-1);
+	}
+}
+
+int main (int argc, char **argv)
+{
+	int errno = 0;
+
+	char opt;
+	char *path;
+	int partitionNum = -1;
+	int ext2Num = -1;
+	int i;
+	
+	while((opt = getopt(argc, argv, "p:i:f:")) != -1){
+		switch(opt){
+			case 'p':
+				partitionNum = atoi(optarg);	
+				break;
+			case 'i':
+				path = optarg;
+				break;
+			case 'f':
+				ext2Num = atoi(optarg);
+				break;
+			default:
+				printf("Correct usage:---");
+				break;
 		}
-		if ((device = open(path, O_RDWR)) == -1) {
-			perror("Could not open device file");
-			exit(-1);
-		}
+	}
+	if ((device = open(path, O_RDWR)) == -1) {
+		perror("Could not open device file");
+		exit(-1);
+	}
 
-		checkPartition(partitionNum, path, !(partitionNum == -1));
+	checkPartition(partitionNum, path, !(partitionNum == -1));
 		
-		if(ext2Num == -1){
-			goto done;
-		}else if(ext2Num == 0){
+	if(ext2Num == -1){
+		goto done;
+	}else if(ext2Num == 0){
 
-		}else{
-        	PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
-        	if(ext2 == NULL || ext2->p->sys_ind != 0x83){
+	}else{
+       	PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
+       	if(ext2 == NULL || ext2->p->sys_ind != 0x83){
 		 	 printf("not ext2\n");
            	 errno = 1;
            	 goto error;
-        	}
-	        partition *e = ext2->p;
-   		    setSuperBlockArguments(e);
-			uchar bitmap[block_size];
-			readiNodeBitmap(e, bitmap);		
-			//pass one
-			checkDirectoryEntitie(e, bitmap);	
-		}
-	/*	
+       	}
+        partition *e = ext2->p;
+	    setSuperBlockArguments(e);
+		uchar bitmap[block_size];
+		readiNodeBitmap(e, bitmap);		
+		//pass one
+		checkDirectoryEntitie(e, bitmap);	
+	}
+/*	
 		ext2_inode rootiNode;
 		rootiNode = getSectorNumOfiNode(2,  e);
 		for(i = 0; i < EXT2_N_BLOCKS; i++){
@@ -222,11 +222,14 @@ void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into)
 		return errno;
 	error:
 		goto done;
-	}
+}
 
 void checkDirectoryEntitie(partition *e, uchar *bitmap){
 	size_t i;
 	int errno = NORMAL;
+
+	// read root directory entry into buffer
+	
 	for(i = 3; i < sublk->s_inodes_count; i++){
 		size_t bitbyte = (i - 1) / 8;
 		size_t bitoff = (i - 1) % 8;
@@ -236,39 +239,44 @@ void checkDirectoryEntitie(partition *e, uchar *bitmap){
 		}
 		ext2_inode inode;			
 		inode = getSectorNumOfiNode(i,  e);
-		if(!isDirectory(inode.i_mode)){
-			continue;
-		}	
-		if(inode.i_block[0] == 0){
-			continue;
+		if(isDirectory(inode.i_mode)){
+			
+			if(inode.i_block[0] == 0){
+				continue;
+			}
+        	unsigned char dirInfo[block_size];
+    	 	readBlock((size_t)inode.i_block[0], dirInfo, e);  
+			// check . 
+			ext2_dir_entry_2* dotEntry = (ext2_dir_entry_2 *)dirInfo;
+			if(strcmp(dotEntry->name, ".") != 0){
+				errno = DIR_ENTRY_DOT_NOTEXIST; 
+			}else if(dotEntry->inode > sublk->s_inodes_count){
+				 printf("Entry '.' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, dotEntry->inode);
+       	     dotEntry->inode = i;
+       	     printf("yes\n");   
+			}else if(dotEntry->inode != i){
+				//if directry entry with "." has wrong inode num
+				errno = DIR_ENTRY_DOT_INODENUM;
+				printf("Entry '.' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, dotEntry->inode);
+				dotEntry->inode = i;
+				printf("yes\n");	
+			}
+			// check ..	
+			ext2_dir_entry_2* ddotEntry = (ext2_dir_entry_2 *)(dirInfo + dotEntry->rec_len);
+			if(strcmp(ddotEntry->name, "..") != 0){
+           	 errno = (errno == DIR_ENTRY_DOT_NOTEXIST) ? DIR_ENTRY_DOTS_NOTEXIST : DIR_ENTRY_DOUBLEDOT_NOTEXIST;
+       		 }else if(ddotEntry->inode > sublk->s_inodes_count){
+ 				printf("Entry '..' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, ddotEntry->inode);
+				printf("no\n");
+			}else if(!isSupDirCorrect(ddotEntry, ddotEntry->inode, e)){
+				printf("Entry '..' in indoe (%zu) has invalid parent inode #: %zu.\nClean? ", i, ddotEntry->inode);
+				printf("no\n"); 	
+			}
 		}
-        unsigned char dirInfo[block_size];
-        readBlock((size_t)inode.i_block[0], dirInfo, e);  
-		// check . 
-		ext2_dir_entry_2* dotEntry = (ext2_dir_entry_2 *)dirInfo;
-		if(strcmp(dotEntry->name, ".") != 0){
-			errno = DIR_ENTRY_DOT_NOTEXIST; 
-		}else if(dotEntry->inode > sublk->s_inodes_count){
-			 printf("Entry '.' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, dotEntry->inode);
-            dotEntry->inode = i;
-            printf("yes\n");   
-		}else if(dotEntry->inode != i){
-			//if directry entry with "." has wrong inode num
-			errno = DIR_ENTRY_DOT_INODENUM;
-			printf("Entry '.' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, dotEntry->inode);
-			dotEntry->inode = i;
-			printf("yes\n");	
-		}
-		// check ..	
-		ext2_dir_entry_2* ddotEntry = (ext2_dir_entry_2 *)(dirInfo + dotEntry->rec_len);
-		if(strcmp(ddotEntry->name, "..") != 0){
-            errno = (errno == DIR_ENTRY_DOT_NOTEXIST) ? DIR_ENTRY_DOTS_NOTEXIST : DIR_ENTRY_DOUBLEDOT_NOTEXIST;
-        }else if(ddotEntry->inode > sublk->s_inodes_count){
- 			printf("Entry '..' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, ddotEntry->inode);
-			printf("no\n");
-		}else if(!isSupDirCorrect(ddotEntry, ddotEntry->inode, e)){
-			printf("Entry '..' in indoe (%zu) has invalid parent inode #: %zu.\nClean? ", i, ddotEntry->inode);
-			printf("no\n"); 	
+		if(!checkUnreferenceNode(e, bitmap, i)){
+			printf("find unreference inode is %zu\nFix? ", i);
+			//TODO: fix it	
+			printf("yes\n");
 		}	
 	}
 	if(errno != NORMAL){
@@ -288,6 +296,62 @@ error:
 		break; 
 	}	
 	goto done;		
+}
+
+bool checkUnreferenceNode(partition *e, uchar *bitmap, size_t inodeNum){
+	size_t i;
+	for(i = 2; i < sublk->s_inodes_count; i++){	
+        size_t bitbyte = (i - 1) / 8;
+        size_t bitoff = (i - 1) % 8;
+        char target = bitmap[bitbyte];
+        if((target >> (7 - bitoff)) & 0x1 == 0){
+            continue;
+        }
+		if(i == inodeNum){
+			continue;
+		}
+        ext2_inode inode;
+        inode = getSectorNumOfiNode(i,  e);
+        if(isDirectory(inode.i_mode)){
+			//ext2_inode diriNode =  getSectorNumOfiNode(i, e);
+			//TODO: only try direct blocks
+		    size_t i;
+		    size_t dataSize = 0;
+		    for(i = 0; i < 12; i++){
+       			 if(inode.i_block[i] == 0){
+           		 break;
+        	}
+        	dataSize += block_size;
+			}
+    		if(dataSize == 0){
+    			continue;
+			}
+    		uchar buf[dataSize];
+		    for(i = 0; i < 12; i++){
+       			if(inode.i_block[i] == 0){
+           			 break;
+			    }
+        		readBlock((size_t)inode.i_block[i], buf + i * block_size, e);
+    		}
+			//try to find out reference
+			ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
+			size_t off = 0;	
+			while(true){
+				if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
+					if(dir->inode == inodeNum){
+						return true;
+					}	
+				}else if(off > dataSize){
+					break;
+				}else if(dir->rec_len == 0){
+					break;
+				}
+				off += dir->rec_len;
+				dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);		
+			}					
+		}
+	}
+	return true;
 }
 
 void checkPartition(int partitionNum, char *path, bool checkable){
