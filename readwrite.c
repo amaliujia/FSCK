@@ -180,7 +180,20 @@ int main (int argc, char **argv)
 	}
 
 	checkPartition(partitionNum, path, !(partitionNum == -1));
-		
+	
+        /*PTE *ext2 = readPartitionEntity(&ptren, ext2Num);	
+        partition *e = ext2->p;
+    	setSuperBlockArguments(e);
+	    ext2_inode rootiNode;
+        rootiNode = getSectorNumOfiNode(2,  e);
+        for(i = 0; i < EXT2_N_BLOCKS; i++){
+            printf("%x ", rootiNode.i_block[i]);
+        }
+        unsigned char dirInfo[1024];
+        readBlock((size_t)rootiNode.i_block[0], dirInfo, e);    
+        ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo; 
+		return;*/ 
+	
 	if(ext2Num == -1){
 		goto done;
 	}else if(ext2Num == 0){
@@ -194,7 +207,6 @@ int main (int argc, char **argv)
        	}
         partition *e = ext2->p;
 	    setSuperBlockArguments(e);
-		uchar bitmap[block_size];
 		readiNodeBitmap(e, bitmap);		
 		//pass one
 		checkDirectoryEntitie(e, bitmap);	
@@ -227,7 +239,9 @@ int main (int argc, char **argv)
 void checkDirectoryEntitie(partition *e, uchar *bitmap){
 	size_t i;
 	int errno = NORMAL;
-
+	uchar bitmap = (uchar *)malloc(sizeof(uchar) * block_size);
+	uchar *culmap = (uchar *)malloc(sizeof(uchar) * (sublk->s_inodes_count * 8));
+	memset(culmap, 0, sublk->s_inodes_count * 8);
 	// read root directory entry into buffer
 	
 	for(i = 3; i < sublk->s_inodes_count; i++){
@@ -239,8 +253,10 @@ void checkDirectoryEntitie(partition *e, uchar *bitmap){
 		}
 		ext2_inode inode;			
 		inode = getSectorNumOfiNode(i,  e);
+//		if(inode.i_block[12] != 0){
+//           printf("Yes. it matters\n");
+//      }
 		if(isDirectory(inode.i_mode)){
-			
 			if(inode.i_block[0] == 0){
 				continue;
 			}
@@ -273,16 +289,25 @@ void checkDirectoryEntitie(partition *e, uchar *bitmap){
 				printf("no\n"); 	
 			}
 		}
-		if(!checkUnreferenceNode(e, bitmap, i)){
-			printf("find unreference inode is %zu\nFix? ", i);
+		if(!checkUnreferenceNode(e, culmap, i)){
+			//printf("Unconnected directory inode %zu\nConnect to /lost+found? ", i);
 			//TODO: fix it	
-			printf("yes\n");
+			//printf("yes\n");
+			size_t y;
+			for(y = 0; y < block_size * 8; y++){
+				if(culmap[y] > 0){
+					printf("[%d](%d)\t", y, culmap[y]);
+				}
+			}
+			return; 
 		}	
 	}
 	if(errno != NORMAL){
 		goto error;
 	}
 done:
+	free(culmap);
+	free(bitmap);
 	return ;
 error:
 	switch(errno){
@@ -298,15 +323,17 @@ error:
 	goto done;		
 }
 
-bool checkUnreferenceNode(partition *e, uchar *bitmap, size_t inodeNum){
+bool checkUnreferenceNode(partition *e, uchar *bitmap, size_t inodeNum, uchar *culmap){
 	size_t i;
+    size_t y;
+	
 	for(i = 2; i < sublk->s_inodes_count; i++){	
-        size_t bitbyte = (i - 1) / 8;
+	    size_t bitbyte = (i - 1) / 8;
         size_t bitoff = (i - 1) % 8;
-        char target = bitmap[bitbyte];
-        if((target >> (7 - bitoff)) & 0x1 == 0){
+//        char target = bitmap[bitbyte];
+        /*if((target >> (7 - bitoff)) & 0x1 == 0){
             continue;
-        }
+        }*/
 		if(i == inodeNum){
 			continue;
 		}
@@ -315,35 +342,53 @@ bool checkUnreferenceNode(partition *e, uchar *bitmap, size_t inodeNum){
         if(isDirectory(inode.i_mode)){
 			//ext2_inode diriNode =  getSectorNumOfiNode(i, e);
 			//TODO: only try direct blocks
-		    size_t i;
 		    size_t dataSize = 0;
-		    for(i = 0; i < 12; i++){
-       			 if(inode.i_block[i] == 0){
-           		 break;
-        	}
-        	dataSize += block_size;
+			uchar *singleLink = NULL;
+		    for(y = 0; y < 13; y++){
+       			if(inode.i_block[y] == 0){
+           			break;
+        		}
+				if(y < 12){
+	        		dataSize += block_size;
+				}else{
+				//	singleLink = (uchar *)malloc(sizeof(uchar) * block_size);	
+				//	readBlock(inode.i_block[y], singleLink, e);
+				//	size_t z;
+				//	for(z = 0; z < block_size / 4; z++){
+				//		if(*(int *)(single
+				//	}
+				}
+			}
+			if(inode.i_block[12] != 0){
+				 printf("Yes. it matters\n");
 			}
     		if(dataSize == 0){
     			continue;
 			}
     		uchar buf[dataSize];
-		    for(i = 0; i < 12; i++){
-       			if(inode.i_block[i] == 0){
+		    for(y = 0; y < 12; y++){
+       			if(inode.i_block[y] == 0){
            			 break;
 			    }
-        		readBlock((size_t)inode.i_block[i], buf + i * block_size, e);
+        		readBlock((size_t)inode.i_block[y], buf + y * block_size, e);
     		}
 			//try to find out reference
 			ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
 			size_t off = 0;	
 			while(true){
 				if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
-					if(dir->inode == inodeNum){
-						return true;
-					}	
-				}else if(off > dataSize){
+					//if(dir->inode == inodeNum){
+					//	return true;
+					//}
+					culmap[dir->inode] += 1;			
+				}
+				if(off >= dataSize){
 					break;
-				}else if(dir->rec_len == 0){
+				}
+				if(dir->inode == 0){
+					break;
+				}
+				if(dir->rec_len == 0){
 					break;
 				}
 				off += dir->rec_len;
@@ -351,7 +396,7 @@ bool checkUnreferenceNode(partition *e, uchar *bitmap, size_t inodeNum){
 			}					
 		}
 	}
-	return true;
+	return false;
 }
 
 void checkPartition(int partitionNum, char *path, bool checkable){
@@ -465,10 +510,6 @@ void setSuperBlockArguments(partition *p){
 	read_sectors(p->start_sect + 2, 2, buf);
 	sublk = (SuperBlock *)malloc(sizeof(SuperBlock));
 	memcpy(sublk, buf, sector_size_bytes * 2);	
-	//sublk.logBlockSize = (*((size_t *)(buf + 24)));
-	//sublk.blockSize = 1024 << sublk.logBlockSize; 
-	//sublk.magicNum = *((unsigned short *)(buf + 56));
-	//printf("-----%d\n", *((size_t *)(buf + 40)));
 }
 
 void readiNode(size_t blockid, size_t localIndex, partition *p, ext2_inode *i){
@@ -515,18 +556,20 @@ ext2_inode getSectorNumOfiNode(size_t inode, partition *p){
 // TODO: here bug exists. No promise on length of dir, may buffer overflow
 int findiNodeOfDirectory(uchar *name, ext2_dir_entry_2 *dir){
 	while(true){
-	if(dir->file_type == 2){ 
-		//char n[512];
-		//n = dir->name;
-		//memcpy(n, dir->name, dir->name_len);
-		//printf("%s\n", dir->name);
-		if(strcmp(dir->name, name) == 0){
-		return dir->inode;		
-		}
-	}else if(dir->rec_len == 0){
-        return -1;
-    }
-	dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);	
+		if(dir->file_type == 2){ 
+			//char n[512];
+			//n = dir->name;
+			//memcpy(n, dir->name, dir->name_len);
+			//printf("%s\n", dir->name);
+			if(strcmp(dir->name, name) == 0){
+				return dir->inode;		
+			}
+		}else if(dir->inode == 0){
+			return -1;
+		}else if(dir->rec_len == 0){
+   	   	  return -1;
+   		 }
+		dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);	
 	}			
 }
 
@@ -565,6 +608,11 @@ bool inline isDirectoryNameMatch(char *name, ext2_dir_entry_2 *entry){
 	return false;
 }
 
-void readiNodeBitmap(partition *e, uchar *bitmap){
-	readBlock(INODE_BITMAP, bitmap, e);
+void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode){
+    size_t inodesPerGourp = sublk->s_inodes_per_group;
+    size_t localGroup = (inode - 1) / inodesPerGourp;
+    GroupDes groupDes; 
+    readBlockGroupDes(localGroup, &groupDes, p);
+	size_t blockId = groupDes.bg_inode_table;			
+	readBlock(blockId, bitmap, e);
 }
