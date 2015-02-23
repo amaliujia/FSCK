@@ -1,2 +1,2 @@
 make
-./myfsck -f 1 -i disk 
+./myfsck -f 3 -i disk 

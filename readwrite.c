@@ -1,91 +1,91 @@
-	/* $cmuPDL: readwrite.c,v 1.3 2010/02/27 11:38:39 rajas Exp $ */
-	/* $cmuPDL: readwrite.c,v 1.4 2014/01/26 21:16:20 avjaltad Exp $ */
-	/* readwrite.c
-	 *
-	 * Code to read and write sectors to a "disk" file.
-	 * This is a support file for the "fsck" storage systems laboratory.
-	 *
-	 * author: Sky Dragon 
-	 */
-	#include "myfsck.h"
-	
-	#if defined(__FreeBSD__)
-	#define lseek64 lseek
-	#endif
+/* $cmuPDL: readwrite.c,v 1.3 2010/02/27 11:38:39 rajas Exp $ */
+/* $cmuPDL: readwrite.c,v 1.4 2014/01/26 21:16:20 avjaltad Exp $ */
+/* readwrite.c
+ *
+ * Code to read and write sectors to a "disk" file.
+ * This is a support file for the "fsck" storage systems laboratory.
+ *
+ * author: Sky Dragon 
+ */
+#include "myfsck.h"
 
-	/* linux: lseek64 declaration needed here to eliminate compiler warning. */
-	extern int64_t lseek64(int, int64_t, int);
-	//extern int opterr;
-	extern char *optarg;
-	extern int optind, opterr, optop;
+#if defined(__FreeBSD__)
+#define lseek64 lseek
+#endif
 
-	static int device;  /* disk file descriptor */
+/* linux: lseek64 declaration needed here to eliminate compiler warning. */
+extern int64_t lseek64(int, int64_t, int);
+//extern int opterr;
+extern char *optarg;
+extern int optind, opterr, optop;
 
-	static ptrEntities ptren;
+static int device;  /* disk file descriptor */
 
-	/* print_sector: print the contents of a buffer containing one sector.
-	 *
-	 * inputs:
-	 *   char *buf: buffer must be >= 512 bytes.
-	 *
-	 * outputs:
-	 *   the first 512 bytes of char *buf are printed to stdout.
-	 *
-	 * modifies:
-	 *   (none)
-	 */
-	void print_sector (unsigned char *buf)
-	{
+static ptrEntities ptren;
+
+/* print_sector: print the contents of a buffer containing one sector.
+ *
+ * inputs:
+ *   char *buf: buffer must be >= 512 bytes.
+ *
+ * outputs:
+ *   the first 512 bytes of char *buf are printed to stdout.
+ *
+* modifies:
+ *   (none)
+ */
+void print_sector (unsigned char *buf)
+{
+	int i;
+	for (i = 0; i < sector_size_bytes; i++) {
+		printf("%02x", buf[i]);
+		if (!((i+1) % 32))
+			printf("\n");      /* line break after 32 bytes */
+		else if (!((i+1) % 4))
+			printf(" ");   /* space after 4 bytes */
+	}
+}
+
+void print_buffer(uchar *buf, size_t size){
 		int i;
-		for (i = 0; i < sector_size_bytes; i++) {
+		for (i = 0; i < size; i++) {
 			printf("%02x", buf[i]);
 			if (!((i+1) % 32))
-				printf("\n");      /* line break after 32 bytes */
+			   printf("\n");      /* line break after 32 bytes */
 			else if (!((i+1) % 4))
 				printf(" ");   /* space after 4 bytes */
 		}
+}
+
+/* read_sectors: read a specified number of sectors into a buffer.
+ *
+ * inputs:
+ *   int64 start_sector: the starting sector number to read.
+ *                       sector numbering starts with 0.
+ *   int numsectors: the number of sectors to read.  must be >= 1.
+ *   int device [GLOBAL]: the disk from which to read.
+ *
+ * outputs:
+ *   void *into: the requested number of sectors are copied into here.
+ *
+ * modifies:
+ *   void *into
+ */
+void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into)
+{
+	ssize_t ret;
+	int64_t lret;
+	int64_t sector_offset;
+	ssize_t bytes_to_read;
+
+	if (num_sectors == 1) {
+	  //  printf("Reading sector %"PRId64"\n", start_sector);
+	} else {
+	   // printf("Reading sectors %"PRId64"--%"PRId64"\n",
+			   //start_sector, start_sector + (num_sectors - 1));
 	}
 
-	void print_buffer(uchar *buf, size_t size){
-			int i;
-			for (i = 0; i < size; i++) {
-				printf("%02x", buf[i]);
-				if (!((i+1) % 32))
-				   printf("\n");      /* line break after 32 bytes */
-				else if (!((i+1) % 4))
-					printf(" ");   /* space after 4 bytes */
-			}
-	}
-
-	/* read_sectors: read a specified number of sectors into a buffer.
-	 *
-	 * inputs:
-	 *   int64 start_sector: the starting sector number to read.
-	 *                       sector numbering starts with 0.
-	 *   int numsectors: the number of sectors to read.  must be >= 1.
-	 *   int device [GLOBAL]: the disk from which to read.
-	 *
-	 * outputs:
-	 *   void *into: the requested number of sectors are copied into here.
-	 *
-	 * modifies:
-	 *   void *into
-	 */
-	void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into)
-	{
-		ssize_t ret;
-		int64_t lret;
-		int64_t sector_offset;
-		ssize_t bytes_to_read;
-
-		if (num_sectors == 1) {
-		  //  printf("Reading sector %"PRId64"\n", start_sector);
-		} else {
-		   // printf("Reading sectors %"PRId64"--%"PRId64"\n",
-				   //start_sector, start_sector + (num_sectors - 1));
-		}
-
-		sector_offset = start_sector * sector_size_bytes;
+	sector_offset = start_sector * sector_size_bytes;
 
 		if ((lret = lseek64(device, sector_offset, SEEK_SET)) != sector_offset) {
 			fprintf(stderr, "Seek to position %"PRId64" failed: "
@@ -186,8 +186,9 @@
 		}else if(ext2Num == 0){
 
 		}else{
-        	PTE *ext2 = readPartitionEntity(&ptren, 1);
-        	if(ext2 == NULL){
+        	PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
+        	if(ext2 == NULL || ext2->p->sys_ind != 0x83){
+		 	 printf("not ext2\n");
            	 errno = 1;
            	 goto error;
         	}
@@ -247,23 +248,46 @@ void checkDirectoryEntitie(partition *e, uchar *bitmap){
 		ext2_dir_entry_2* dotEntry = (ext2_dir_entry_2 *)dirInfo;
 		if(strcmp(dotEntry->name, ".") != 0){
 			errno = DIR_ENTRY_DOT_NOTEXIST; 
+		}else if(dotEntry->inode > sublk->s_inodes_count){
+			 printf("Entry '.' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, dotEntry->inode);
+            dotEntry->inode = i;
+            printf("yes\n");   
 		}else if(dotEntry->inode != i){
 			//if directry entry with "." has wrong inode num
 			errno = DIR_ENTRY_DOT_INODENUM;
-			printf("Entry '.' in inode (%zu) has invalid inode #: %zu. Fix? ", i, dotEntry->inode);
+			printf("Entry '.' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, dotEntry->inode);
 			dotEntry->inode = i;
 			printf("yes\n");	
 		}
-		
+		// check ..	
 		ext2_dir_entry_2* ddotEntry = (ext2_dir_entry_2 *)(dirInfo + dotEntry->rec_len);
-		if(strcmp(dotEntry->name, ".") != 0){
+		if(strcmp(ddotEntry->name, "..") != 0){
             errno = (errno == DIR_ENTRY_DOT_NOTEXIST) ? DIR_ENTRY_DOTS_NOTEXIST : DIR_ENTRY_DOUBLEDOT_NOTEXIST;
-        }else if(!isSupDirCorrect(ddotEntry, ddotEntry->inode, e)){
-			printf("Entry '..' in indoe (%zu) has invalid parent inode #: %zu. Fix? ", i, dotEntry->inode);
+        }else if(ddotEntry->inode > sublk->s_inodes_count){
+ 			printf("Entry '..' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, ddotEntry->inode);
+			printf("no\n");
+		}else if(!isSupDirCorrect(ddotEntry, ddotEntry->inode, e)){
+			printf("Entry '..' in indoe (%zu) has invalid parent inode #: %zu.\nClean? ", i, ddotEntry->inode);
 			printf("no\n"); 	
 		}	
 	}
-			
+	if(errno != NORMAL){
+		goto error;
+	}
+done:
+	return ;
+error:
+	switch(errno){
+		case DIR_ENTRY_DOT_NOTEXIST:
+		break;
+		case DIR_ENTRY_DOUBLEDOT_NOTEXIST:
+		break;
+		case DIR_ENTRY_DOTS_NOTEXIST:
+		break;
+		default:
+		break; 
+	}	
+	goto done;		
 }
 
 void checkPartition(int partitionNum, char *path, bool checkable){
@@ -343,130 +367,130 @@ void checkPartition(int partitionNum, char *path, bool checkable){
 			printf("-1\n");
 }
 
-	PTE *readPartitionEntity(ptrEntities *ptren, int partitionNum){
-		PTE *p = NULL;
-		PTE *ne = ptren->p;
-		int i;
-		for(i = 0; i < ptren->count; i++){
-			if(ne->index == partitionNum){
-				p = ne;	
-				goto done;
-			 }
-			 ne = ne->next;
-		}	
-	done:
-		return p;
-	}
-
-	unsigned short getMagicNum(partition *p){
-		unsigned char buf[sector_size_bytes * 2];
-		read_sectors(p->start_sect + 2, 2, buf);
-		unsigned short magic= *((unsigned short *)(buf + 56));
-		printf("%x\n", magic);
-		return magic; 
-	}
-
-	size_t getiNodesPerGroup(partition *p){
-		unsigned char buf[sector_size_bytes * 2];
-		read_sectors(p->start_sect + 2, 2, buf);
-		size_t n = *((size_t *)(buf + 40));
-	}
-
-	void setSuperBlockArguments(partition *p){
-		unsigned char buf[sector_size_bytes * 2];
-		read_sectors(p->start_sect + 2, 2, buf);
-		sublk = (SuperBlock *)malloc(sizeof(SuperBlock));
-		memcpy(sublk, buf, sector_size_bytes * 2);	
-		//sublk.logBlockSize = (*((size_t *)(buf + 24)));
-		//sublk.blockSize = 1024 << sublk.logBlockSize; 
-		//sublk.magicNum = *((unsigned short *)(buf + 56));
-		//printf("-----%d\n", *((size_t *)(buf + 40)));
-	}
-
-	void readiNode(size_t blockid, size_t localIndex, partition *p, ext2_inode *i){
-		//size_t off = (localIndex + sublk->s_first_ino - 1) * inode_size;
-		size_t off = (localIndex) * inode_size;
-		uchar buf[block_size];
-		size_t offId = off / block_size;
-		size_t offIndex = off % block_size;
-		read_sectors(p->start_sect + (blockid + offId) * 2, 2, buf);
-		memcpy(i, buf + offIndex , sizeof(ext2_inode));	
+PTE *readPartitionEntity(ptrEntities *ptren, int partitionNum){
+	PTE *p = NULL;
+	PTE *ne = ptren->p;
+	int i;
+	for(i = 0; i < ptren->count; i++){
+		if(ne->index == partitionNum){
+			p = ne;	
+			goto done;
+		 }
+		 ne = ne->next;
 	}	
+done:
+	return p;
+}
 
-    void readBlock(size_t blockid, uchar *buf, partition *p){
-        read_sectors(p->start_sect + (blockid) * 2, 2, buf);
-    }
+unsigned short getMagicNum(partition *p){
+	unsigned char buf[sector_size_bytes * 2];
+	read_sectors(p->start_sect + 2, 2, buf);
+	unsigned short magic= *((unsigned short *)(buf + 56));
+	printf("%x\n", magic);
+	return magic; 
+}
 
-	void readBlockGroupDes(size_t localGroup, GroupDes *b, partition *p){
-		unsigned char buf[block_size];
-		read_sectors(p->start_sect + 4, block_size / sector_size_bytes, buf);
-		//printf("size of gourp descriptor: %d,  %d  %d\n", sizeof(GroupDes), block_size / sector_size_bytes, localGroup);
-		memcpy(b, buf + localGroup * block_des, block_des);
-	}
+size_t getiNodesPerGroup(partition *p){
+	unsigned char buf[sector_size_bytes * 2];
+	read_sectors(p->start_sect + 2, 2, buf);
+	size_t n = *((size_t *)(buf + 40));
+}
+
+void setSuperBlockArguments(partition *p){
+	unsigned char buf[sector_size_bytes * 2];
+	read_sectors(p->start_sect + 2, 2, buf);
+	sublk = (SuperBlock *)malloc(sizeof(SuperBlock));
+	memcpy(sublk, buf, sector_size_bytes * 2);	
+	//sublk.logBlockSize = (*((size_t *)(buf + 24)));
+	//sublk.blockSize = 1024 << sublk.logBlockSize; 
+	//sublk.magicNum = *((unsigned short *)(buf + 56));
+	//printf("-----%d\n", *((size_t *)(buf + 40)));
+}
+
+void readiNode(size_t blockid, size_t localIndex, partition *p, ext2_inode *i){
+	//size_t off = (localIndex + sublk->s_first_ino - 1) * inode_size;
+	size_t off = (localIndex) * inode_size;
+	uchar buf[block_size];
+	size_t offId = off / block_size;
+	size_t offIndex = off % block_size;
+	read_sectors(p->start_sect + (blockid + offId) * 2, 2, buf);
+	memcpy(i, buf + offIndex , sizeof(ext2_inode));	
+}	
+
+void readBlock(size_t blockid, uchar *buf, partition *p){
+    read_sectors(p->start_sect + (blockid) * 2, 2, buf);
+}
+
+void readBlockGroupDes(size_t localGroup, GroupDes *b, partition *p){
+	unsigned char buf[block_size];
+	read_sectors(p->start_sect + 4, block_size / sector_size_bytes, buf);
+	//printf("size of gourp descriptor: %d,  %d  %d\n", sizeof(GroupDes), block_size / sector_size_bytes, localGroup);
+	memcpy(b, buf + localGroup * block_des, block_des);
+}
 	
-	bool inline isDirectory(unsigned short imode){
-		return ((imode & 0xf000) == 0x4000) ? 1 : 0;	
-	}
+bool inline isDirectory(unsigned short imode){
+	return ((imode & 0xf000) == 0x4000) ? 1 : 0;	
+}
 
-	ext2_inode getSectorNumOfiNode(size_t inode, partition *p){
-		size_t inodesPerGourp = sublk->s_inodes_per_group;
-		size_t localGroup = (inode - 1) / inodesPerGourp;
-		size_t localIndex = (inode - 1) % inodesPerGourp;	
-		GroupDes groupDes; 
-		readBlockGroupDes(localGroup, &groupDes, p);	
-		size_t blockId = groupDes.bg_inode_table; 
+ext2_inode getSectorNumOfiNode(size_t inode, partition *p){
+	size_t inodesPerGourp = sublk->s_inodes_per_group;
+	size_t localGroup = (inode - 1) / inodesPerGourp;
+	size_t localIndex = (inode - 1) % inodesPerGourp;	
+	GroupDes groupDes; 
+	readBlockGroupDes(localGroup, &groupDes, p);	
+	size_t blockId = groupDes.bg_inode_table; 
 //		printf("Block id: %zu\n", blockId);
-		ext2_inode i;
-		readiNode(blockId, localIndex, p, &i);
-		if(isDirectory(i.i_mode)){
-//			printf("111111------\n");
-		}
-		return i;
+	ext2_inode i;
+	readiNode(blockId, localIndex, p, &i);
+	if(isDirectory(i.i_mode)){
+//	printf("111111------\n");
 	}
+	return i;
+}
 
 // TODO: here bug exists. No promise on length of dir, may buffer overflow
-	int findiNodeOfDirectory(uchar *name, ext2_dir_entry_2 *dir){
+int findiNodeOfDirectory(uchar *name, ext2_dir_entry_2 *dir){
 	while(true){
-		if(dir->file_type == 2){ 
-				//char n[512];
-				//n = dir->name;
-				//memcpy(n, dir->name, dir->name_len);
-				printf("%s\n", dir->name);
-				if(strcmp(dir->name, name) == 0){
-					return dir->inode;		
-				}
-		}else if(dir->rec_len == 0){
-                    return -1;
-        }
-		dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);	
+	if(dir->file_type == 2){ 
+		//char n[512];
+		//n = dir->name;
+		//memcpy(n, dir->name, dir->name_len);
+		//printf("%s\n", dir->name);
+		if(strcmp(dir->name, name) == 0){
+		return dir->inode;		
+		}
+	}else if(dir->rec_len == 0){
+        return -1;
+    }
+	dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);	
 	}			
 }
 
 bool inline isSupDirCorrect(ext2_dir_entry_2 *entry, size_t inodeNum, partition *e){
-		ext2_inode parentiNode =  getSectorNumOfiNode(inodeNum, e);
-		//just try direct blocks
-	   	size_t i;
-		size_t dataSize = 0;
-		for(i = 0; i < 12; i++){
-			if(parentiNode.i_block[i] == 0){
-				break;
-			}
-			dataSize += block_size;
+	ext2_inode parentiNode =  getSectorNumOfiNode(inodeNum, e);
+	//just try direct blocks
+   	size_t i;
+	size_t dataSize = 0;
+	for(i = 0; i < 12; i++){
+		if(parentiNode.i_block[i] == 0){
+			break;
 		}
-		if(dataSize == 0){
-			return false;
-		}
-		uchar buf[dataSize];
-		for(i = 0; i < 12; i++){
-            if(parentiNode.i_block[i] == 0){
-                break;
-            }
-			readBlock((size_t)parentiNode.i_block[i], buf + i * block_size, e); 
-		}
-		if(findiNodeOfDirectory(entry->name, (ext2_dir_entry_2 *)buf) == -1){
-			return false;
-		}		
-		return true;	
+		dataSize += block_size;
+	}
+	if(dataSize == 0){
+		return false;
+	}
+	uchar buf[dataSize];
+	for(i = 0; i < 12; i++){
+       if(parentiNode.i_block[i] == 0){
+            break;
+       }
+		readBlock((size_t)parentiNode.i_block[i], buf + i * block_size, e); 
+	}
+	if(findiNodeOfDirectory(entry->name, (ext2_dir_entry_2 *)buf) == -1){
+		return false;
+	}		
+	return true;	
 }
 
 
