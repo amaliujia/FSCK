@@ -207,9 +207,9 @@ int main (int argc, char **argv)
        	}
         partition *e = ext2->p;
 	    setSuperBlockArguments(e);
-		readiNodeBitmap(e, bitmap);		
+		//readiNodeBitmap(e, bitmap);		
 		//pass one
-		checkDirectoryEntitie(e, bitmap);	
+		checkDirectoryEntitie(e);	
 	}
 /*	
 		ext2_inode rootiNode;
@@ -236,15 +236,17 @@ int main (int argc, char **argv)
 		goto done;
 }
 
-void checkDirectoryEntitie(partition *e, uchar *bitmap){
+void checkDirectoryEntitie(partition *e){
 	size_t i;
 	int errno = NORMAL;
-	uchar bitmap = (uchar *)malloc(sizeof(uchar) * block_size);
+	size_t last = 0;
+	uchar *bitmap = (uchar *)malloc(sizeof(uchar) * block_size);
 	uchar *culmap = (uchar *)malloc(sizeof(uchar) * (sublk->s_inodes_count * 8));
 	memset(culmap, 0, sublk->s_inodes_count * 8);
 	// read root directory entry into buffer
-	
 	for(i = 3; i < sublk->s_inodes_count; i++){
+		readiNodeBitmap(e, bitmap, i, last);
+		last = i;
 		size_t bitbyte = (i - 1) / 8;
 		size_t bitoff = (i - 1) % 8;
 		char target = bitmap[bitbyte];
@@ -289,17 +291,17 @@ void checkDirectoryEntitie(partition *e, uchar *bitmap){
 				printf("no\n"); 	
 			}
 		}
-		if(!checkUnreferenceNode(e, culmap, i)){
-			//printf("Unconnected directory inode %zu\nConnect to /lost+found? ", i);
+		if(!checkUnreferenceNode(e, i, culmap)){
+			printf("Unconnected directory inode %zu\nConnect to /lost+found? ", i);
 			//TODO: fix it	
-			//printf("yes\n");
-			size_t y;
+			printf("yes\n");
+	/*		size_t y;
 			for(y = 0; y < block_size * 8; y++){
 				if(culmap[y] > 0){
 					printf("[%d](%d)\t", y, culmap[y]);
 				}
 			}
-			return; 
+			return;*/ 
 		}	
 	}
 	if(errno != NORMAL){
@@ -323,17 +325,21 @@ error:
 	goto done;		
 }
 
-bool checkUnreferenceNode(partition *e, uchar *bitmap, size_t inodeNum, uchar *culmap){
+bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap){
 	size_t i;
     size_t y;
-	
+	size_t last = 0;
+	uchar bitmap[block_size];
+		
 	for(i = 2; i < sublk->s_inodes_count; i++){	
+        readiNodeBitmap(e, bitmap, i, last);
+        last = i;
 	    size_t bitbyte = (i - 1) / 8;
         size_t bitoff = (i - 1) % 8;
-//        char target = bitmap[bitbyte];
-        /*if((target >> (7 - bitoff)) & 0x1 == 0){
+        char target = bitmap[bitbyte];
+        if((target >> (7 - bitoff)) & 0x1 == 0){
             continue;
-        }*/
+        }
 		if(i == inodeNum){
 			continue;
 		}
@@ -608,11 +614,24 @@ bool inline isDirectoryNameMatch(char *name, ext2_dir_entry_2 *entry){
 	return false;
 }
 
-void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode){
+void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last){
+	if(last == 0){
+	    size_t inodesPerGourp = sublk->s_inodes_per_group;
+   		size_t localGroup = (inode - 1) / inodesPerGourp;
+    	GroupDes groupDes; 
+    	readBlockGroupDes(localGroup, &groupDes, e);
+		size_t blockId = groupDes.bg_inode_table;			
+		readBlock(blockId, bitmap, e);
+		return;
+	}
     size_t inodesPerGourp = sublk->s_inodes_per_group;
     size_t localGroup = (inode - 1) / inodesPerGourp;
-    GroupDes groupDes; 
-    readBlockGroupDes(localGroup, &groupDes, p);
-	size_t blockId = groupDes.bg_inode_table;			
-	readBlock(blockId, bitmap, e);
+	size_t lastGroup = (last - 1) / inodesPerGourp;
+	if(lastGroup == localGroup){
+		return;
+	}
+    GroupDes groupDes;
+    readBlockGroupDes(localGroup, &groupDes, e);
+    size_t blockId = groupDes.bg_inode_table;
+    readBlock(blockId, bitmap, e);			
 }

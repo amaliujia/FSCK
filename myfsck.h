@@ -92,10 +92,10 @@ void print_sector (unsigned char *buf);
 void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into);
 void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from);
 PTE *readPartitionEntity(ptrEntities *ptren, int i);
-void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode);
+void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last);
 
 // checker function
 void checkPartition(int partition, char *path, bool checkable); 
 void checkDirectoryEntities(partition *e);
-bool checkUnreferenceNode(partition *e, uchar *bitmap, size_t inodeNum, uchar *culmap);
+bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap);
 #endif
