@@ -303,11 +303,24 @@ void checkDirectoryEntitie(partition *e){
 			 	isError = true;
        		 }else if(ddotEntry->inode > sublk->s_inodes_count){
  				printf("Entry '..' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, ddotEntry->inode);
-				printf("no\n");
+                size_t n = findParentInode(e, i);
+                if( n == 0)
+                    printf("no\n");
+                else{
+                    ddotEntry->inode = n;
+                
+				    printf("n: %zu  yes\n", n);
+                }
 				isError = true;
 			}else if(!isSupDirCorrect(ddotEntry, ddotEntry->inode, e)){
 				printf("Entry '..' in indoe (%zu) has invalid parent inode #: %zu.\nClean? ", i, ddotEntry->inode);
-				printf("no\n");
+				size_t n = findParentInode(e, i);
+				if( n == 0)		
+					printf("no\n");
+				else{
+					ddotEntry->inode = n;
+					printf("yes\n");
+				}
 				isError = true; 	
 			}
         	if(isError){
@@ -319,22 +332,27 @@ void checkDirectoryEntitie(partition *e){
 		//	printf("Unconnected directory inode %zu\nConnect to /lost+found? ", i);
 			//TODO: fix it	
 		//	printf("yes\n");
-		//	size_t y;
-			/*for(y = 0; y < block_size * 8; y++){
-				if(culmap[y] > 0){
-					printf("[%d](%d)\t", y, culmap[y]);
-				}
-			}
-			return;*/ 
-		//}
 	checkUnreferenceNode(e, i, culmap);
+    size_t y;
+/*    for(y = 0; y < block_size * 8; y++){
+       if(culmap[y] > 0){
+           printf("[%d](%d)\t", y, culmap[y]);
+       }
+    }*/
+
 	for(i = 3; i < sublk->s_inodes_count; i++){
 		ext2_inode inode;
         inode = getSectorNumOfiNode(i,  e);
-		if(inode.i_links_count >= 1 && culmap[i] == 0){
-			printf("Unconnected directory inode %zu\n", i);
-		}else if(inode.i_links_count >= 1 && inode.i_links_count != (culmap[i])){
-			printf("Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, culmap[i]);		
+	//	if(inode.i_links_count >= 1 && culmap[i] == 0){
+	//		printf("Unconnected directory inode %zu\n", i);
+	//	}
+		if(culmap[i] == 0){
+			continue;
+		}
+		if(inode.i_links_count != (culmap[i])){
+			printf("Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, culmap[i]);	
+			inode.i_links_count = culmap[i];
+			writeiNode(&inode, i, e);	
 		} 
 	}
 	
@@ -359,6 +377,89 @@ error:
 	goto done;		
 }
 
+size_t findParentInode(partition *e, size_t inodeNum){
+    size_t i;
+    size_t y;
+
+    for(i = 2; i < sublk->s_inodes_count; i++){
+        if(i == inodeNum){
+            continue;
+        }
+        ext2_inode inode;
+        inode = getSectorNumOfiNode(i,  e);
+        if(isDirectory(inode.i_mode)){
+            size_t dataSize = 0;
+            uchar *singleLink = NULL;
+            for(y = 0; y < 13; y++){
+                if(inode.i_block[y] == 0){
+                    break;
+                }
+                if(y < 12){
+                    dataSize += block_size;
+                }else{
+                    singleLink = (uchar *)malloc(sizeof(uchar) * block_size);	
+                    readBlock(inode.i_block[y], singleLink, e);
+                    size_t z;
+                    for(z = 0; z < block_size / 4; z++){
+                        if(*(size_t *)(singleLink) != 0){
+							dataSize += block_size;
+						}else{
+							break;
+						}
+					}
+				}
+			}
+			if(inode.i_block[12] != 0){
+				 printf("Yes. it matters\n");
+			}
+    		if(dataSize == 0){
+    			continue;
+			}
+    		uchar buf[dataSize];
+		    for(y = 0; y < 13; y++){
+       			if(inode.i_block[y] == 0){
+           			 break;
+			    }
+        		if(y < 12){
+					readBlock((size_t)inode.i_block[y], buf + y * block_size, e);
+				}else{
+                	if(singleLink != NULL){
+                   		 size_t z;
+                   		 for(z = 0; z < block_size / 4; z++){
+                   	    	 if(*(size_t *)(singleLink + z) != 0){
+                   	       	  readBlock(*(size_t *)(singleLink + z), buf + (z + y) * block_size, e); 
+                   	     	}else{
+								break;
+							}
+                   		 }
+						free(singleLink);
+                	}
+				}
+    		}
+			ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
+			size_t off = 0;	
+			while(true){
+				if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){					if(dir->inode == inodeNum){
+						return i;
+					}
+				}
+				if(off >= dataSize){
+					break;
+				}
+				if(dir->inode == 0){
+					break;
+				}
+				if(dir->rec_len == 0){
+					break;
+				}
+				off += dir->rec_len;
+				dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);		
+			}
+		}
+	}
+	return 0;
+}  
+
 bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap){
 	size_t i;
     size_t y;
@@ -371,9 +472,9 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap){
 	    size_t bitbyte = (i - 1) / 8;
         size_t bitoff = (i - 1) % 8;
         char target = bitmap[bitbyte];
-        if((target >> (7 - bitoff)) & 0x1 == 0){
-            continue;
-        }
+        //if((target >> (7 - bitoff)) & 0x1 == 0){
+         //   continue;
+        //}
 		if(i == inodeNum){
 			continue;
 		}
@@ -434,12 +535,12 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap){
 			ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
 			size_t off = 0;	
 			while(true){
-				if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
+				//if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
 					//if(dir->inode == inodeNum){
 					//	return true;
 					//}
-					culmap[dir->inode] += 1;			
-				}
+				//	culmap[dir->inode] += 1;			
+				//}
 				if(off >= dataSize){
 					break;
 				}
@@ -449,6 +550,7 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap){
 				if(dir->rec_len == 0){
 					break;
 				}
+				culmap[dir->inode] += 1;
 				off += dir->rec_len;
 				dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);		
 			}					
@@ -613,6 +715,22 @@ ext2_inode getSectorNumOfiNode(size_t inode, partition *p){
 //	printf("111111------\n");
 	}
 	return i;
+}
+
+void writeiNode(ext2_inode *i, size_t inode, partition *p){
+    size_t inodesPerGourp = sublk->s_inodes_per_group;
+    size_t localGroup = (inode - 1) / inodesPerGourp;
+    size_t localIndex = (inode - 1) % inodesPerGourp;
+    GroupDes groupDes;
+    readBlockGroupDes(localGroup, &groupDes, p);
+    size_t blockId = groupDes.bg_inode_table;
+	uchar buf[block_size];
+    size_t off = (localIndex) * inode_size;
+    size_t offId = off / block_size;
+    size_t offIndex = off % block_size;
+    read_sectors(p->start_sect + (blockId + offId) * 2, 2, buf);		
+	((ext2_inode *)(buf + offIndex))->i_links_count = i->i_links_count;
+	write_sectors(p->start_sect + (blockId + offId) * 2, 2, buf);
 }
 
 // TODO: here bug exists. No promise on length of dir, may buffer overflow
