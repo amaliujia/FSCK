@@ -84,6 +84,7 @@ bool inline isSupDirCorrect(ext2_dir_entry_2 *entry, size_t inodeNum, partition 
 unsigned short getMagicNum(partition *p);
 size_t getiNodesPerGroup(partition *p);
 ext2_inode getSectorNumOfiNode(size_t inode, partition *p);
+ext2_inode getSectorNumofiNodeByName(char *name, partition *p);
 void readiNodeTable(size_t localGroup, size_t localIndex, unsigned char *buf);
 void setSuperBlockArguments(partition *p);
 void readBlock(size_t blockid, uchar *buf, partition *p);
@@ -96,9 +97,11 @@ void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last);
 void writeBlock(size_t blockId, uchar *buf, partition *p);
 size_t findParentInode(partition *e, size_t inodeNum);
 void writeiNode(ext2_inode *i, size_t inode, partition *p);
+size_t readiNodeBlocks(ext2_inode inode, uchar *buf, partition *p);
+void addDirEntry(ext2_inode *parentDir, size_t lostInode, partition *p); 
 
 // checker function
 void checkPartition(int partition, char *path, bool checkable); 
 void checkDirectoryEntities(partition *e);
-bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap);
+bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, ext2_inode *lostfound);
 #endif
