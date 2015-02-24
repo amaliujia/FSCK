@@ -93,6 +93,7 @@ void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into);
 void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from);
 PTE *readPartitionEntity(ptrEntities *ptren, int i);
 void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last);
+void writeBlock(size_t blockId, uchar *buf, partition *p);
 
 // checker function
 void checkPartition(int partition, char *path, bool checkable); 
