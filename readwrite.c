@@ -125,10 +125,10 @@ void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from)
 	ssize_t bytes_to_write;
 
 	if (num_sectors == 1) {
-	//	printf("Reading sector  %"PRId64"\n", start_sector);
+		printf("Reading sector  %"PRId64"\n", start_sector);
 	} else {
-	//	printf("Reading sectors %"PRId64"--%"PRId64"\n",
-	//		   start_sector, start_sector + (num_sectors - 1));
+		printf("Reading sectors %"PRId64"--%"PRId64"\n",
+			   start_sector, start_sector + (num_sectors - 1));
 	}
 
 	sector_offset = start_sector * sector_size_bytes;
@@ -266,9 +266,6 @@ void checkDirectoryEntitie(partition *e){
 	//	}
 		ext2_inode inode;			
 		inode = getSectorNumOfiNode(i,  e);
-//		if(inode.i_block[12] != 0){
-//           printf("Yes. it matters\n");
-//      }
 		if(isDirectory(inode.i_mode)){
 			if(inode.i_block[0] == 0){
 				continue;
@@ -344,6 +341,7 @@ void checkDirectoryEntitie(partition *e){
         inode = getSectorNumOfiNode(i,  e);
 		if(inode.i_links_count >= 1 && culmap[i] == 0){
 			printf("Unconnected directory inode %zu\n", i);
+            addDirEntry(&lostfound, i, e);
 		}
 //		if(culmap[i] == 0){
 //			continue;
@@ -729,10 +727,7 @@ ext2_inode getSectorNumofiNodeByName(char *name, partition *p){
         off += dir->rec_len;
         dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);
     }
-//	assert(returnNode == EXT2_ROOT_INO);
-	if(returnNode == EXT2_ROOT_INO){
 		printf("Error: cannot find lost+found\n");
-	}
 done:
 	free(buf);
 	return getSectorNumOfiNode(returnNode , p);;  
@@ -741,25 +736,12 @@ done:
 size_t readiNodeBlocks(ext2_inode inode, uchar *buf, partition *p){
             size_t dataSize = 0;
             size_t y;
-			uchar *singleLink = NULL;
-            for(y = 0; y < 13; y++){
+            
+			for(y = 0; y < 12; y++){
                 if(inode.i_block[y] == 0){
                     break;
                 } 
-                if(y < 12){
-                    dataSize += block_size;
-                }else{
-                    singleLink = (uchar *)malloc(sizeof(uchar) * block_size);
-                    readBlock(inode.i_block[y], singleLink, p);
-                    size_t z; 
-                    for(z = 0; z < block_size / 4; z++){
-                        if(*(size_t *)(singleLink) != 0){
-                            dataSize += block_size;
-                        }else{
-                            break; 
-                        }
-                    } 
-                } 
+                dataSize += block_size;
             }
             if(inode.i_block[12] != 0){
                  printf("Yes. it matters\n");
@@ -767,27 +749,13 @@ size_t readiNodeBlocks(ext2_inode inode, uchar *buf, partition *p){
             if(dataSize == 0){
               	goto done; 
             }
-			buf = (uchar *)malloc(sizeof(uchar) * dataSize);
-            for(y = 0; y < 13; y++){
+			buf = (uchar *)malloc(dataSize);
+            for(y = 0; y < 12; y++){
                 if(inode.i_block[y] == 0){
                      break;
                 }
-                if(y < 12){
-                    readBlock((size_t)inode.i_block[y], buf + y * block_size, p);
-                }else{
-                    if(singleLink != NULL){
-                         size_t z;
-                         for(z = 0; z < block_size / 4; z++){
-                             if(*(size_t *)(singleLink + z) != 0){
-                              readBlock(*(size_t *)(singleLink + z), buf + (z + y) * block_size, p);
-                            }else{
-                                break;
-                            }
-                         }
-                        free(singleLink);
-                    }
-                }
-            }	
+                readBlock((size_t)inode.i_block[y], buf + y * block_size, p);
+            }
 done:
 	return dataSize;	
 }
@@ -901,7 +869,6 @@ void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last){
     readBlock(blockId, bitmap, e);			
 }
 
-}
 
 size_t fileType(size_t imode){
 	size_t c = imode & 0xf000;
@@ -925,13 +892,25 @@ size_t fileType(size_t imode){
 	} 
 }
 
+size_t IntLen(size_t x) {
+    if(x>=1000000000) return 10;
+    if(x>=100000000) return 9;
+    if(x>=10000000) return 8;
+    if(x>=1000000) return 7;
+    if(x>=100000) return 6;
+    if(x>=10000) return 5;
+    if(x>=1000) return 4;
+    if(x>=100) return 3;
+    if(x>=10) return 2;
+    return 1;
+}
+
 void addDirEntry(ext2_inode *parentDir, size_t lostInode, partition *p){
 	uchar *buf;
 	size_t dataSize = readiNodeBlocks(*parentDir, buf, p);
 	size_t off = 0;
 
     ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
-    size_t off = 0;
     while(true){
          if(off >= dataSize){
               break;
@@ -939,16 +918,23 @@ void addDirEntry(ext2_inode *parentDir, size_t lostInode, partition *p){
          if(dir->inode == 0){
 			ext2_inode lost = getSectorNumOfiNode(lostInode, p);
             dir->inode = lostInode;
-			char str[15];
+			char str[128];
 			sprintf(str, "%d", lostInode);
 			if(strcmp(str, "31") == 0){
 				printf("sprintf function works\n");
 			}
-			dir->name = str;
-			dir->name_len = floor(log10(abs(the_integer))) + 1; 
-        	dir->file_type = fileType(lost.i_mode);
+			dir->name_len = IntLen(lostInode); 
+    	    memcpy(dir->name, str, dir->name_len);
+			dir->file_type = fileType(lost.i_mode);
 			dir->rec_len = 4 + 2 + dir->name_len + 1 + 1;
-			
+			size_t i;
+			for(i = 0; i < 12; i++){
+				if(parentDir->i_block[i] == 0){
+					break;
+				}else{	
+					writeBlock(parentDir->i_block[i], buf + i * block_size, p);
+				}	
+			}					
 			break; 
 		  }
          if(dir->rec_len == 0){

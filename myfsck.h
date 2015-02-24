@@ -10,7 +10,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <inttypes.h>
-
+#include <math.h>
 #include "genhd.h"
 #include "ext2_fs.h"
 
