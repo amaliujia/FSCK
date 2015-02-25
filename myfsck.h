@@ -74,7 +74,6 @@ const unsigned int inode_table_size_bytes = 214 * 1024;
 const unsigned int block_des = 32;
 const unsigned int inode_size = 128;
 static size_t blockSize = 0;
-static SuperBlock *sublk;
   
 //inline toolbox 
 bool inline isDirectory(unsigned short imode);
