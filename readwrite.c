@@ -357,7 +357,7 @@ void checkDirectoryEntitie(partition *e){
     for(i = 2; i < sublk->s_inodes_count; i++){
         ext2_inode inode;
         inode = getSectorNumOfiNode(i,  e);
-		if(inode.i_links_count != linkmap[i]){
+		if(inode.i_links_count != linkmap[i] && inode.i_links_count != 0){
 			 printf("Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, linkmap[i]);
 			inode.i_links_count = linkmap[i];
 			writeiNode(&inode, i, e);
