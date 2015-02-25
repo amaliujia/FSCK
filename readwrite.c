@@ -315,7 +315,7 @@ void checkDirectoryEntitie(partition *e){
                 }
 				isError = true;
 			}else if(!isSupDirCorrect(ddotEntry, ddotEntry->inode, e)){
-				printf("Entry '..' in indoe (%zu) has invalid parent inode #: %zu.\nClean? ", i, ddotEntry->inode);
+				printf("SkyDragon: Entry '..' in indoe (%zu) has invalid parent inode #: %zu.\nClean? ", i, ddotEntry->inode);
 				size_t n = findParentInode(e, i);
 				if(n == 0)		
 					printf("no\n");
@@ -345,7 +345,7 @@ void checkDirectoryEntitie(partition *e){
 		ext2_inode inode;
         inode = getSectorNumOfiNode(i,  e);
 		if(inode.i_links_count >= 1 && culmap[i] == 0){
-			printf("Unconnected directory inode %zu\n", i);
+			printf("SkyDragon: Unconnected directory inode %zu\t\t", i);
             addDirEntry(lostfoundNum, i, e);
 			printf("relink to /lost+found/%d\n", i);
 		}
@@ -361,7 +361,7 @@ void checkDirectoryEntitie(partition *e){
         ext2_inode inode;
         inode = getSectorNumOfiNode(i,  e);
 		if(inode.i_links_count != linkmap[i] && inode.i_links_count != 0){
-			 printf("Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, linkmap[i]);
+			 printf("SkyDragon: Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, linkmap[i]);
 			inode.i_links_count = linkmap[i];
 			writeiNode(&inode, i, e);
 		}	
