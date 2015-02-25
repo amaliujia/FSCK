@@ -570,7 +570,10 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
 				if(!first){
 					culmap[dir->inode] += 1;
 				}else{
-                	if(strcmp(dir->name, ".") != 0){
+                	if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..")){
+						if(dir->inode == 2009 || dir->inode == 12){
+//							printf("2009here\n");
+						}
                    		 culmap[dir->inode] += 1;
        	        	}
 	                if(strcmp(dir->name, "lost+found") == 0){
