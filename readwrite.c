@@ -174,7 +174,7 @@ int main (int argc, char **argv)
 				break;
 		}
 	}
-	if ((device = open(path, O_RDWR)) == -1) {
+	if((device = open(path, O_RDWR)) == -1) {
 		perror("Could not open device file");
 		exit(-1);
 	}
@@ -202,7 +202,7 @@ int main (int argc, char **argv)
     	PTE *ne = ptren.p;
     	int i;
     	for(i = 0; i < ptren.count; i++){
-       		 if(ne->p->sys_ind  == 0x83){
+       		 if(ne->p->sys_ind  == 0x83 && i != ptren.count - 1){
        		    p = ne->p;
 				setSuperBlockArguments(p);
 				checkDirectoryEntitie(p);		 
@@ -219,18 +219,15 @@ int main (int argc, char **argv)
         partition *e = ext2->p;
 	    setSuperBlockArguments(e);
 
-        ext2_inode rootiNode;
+        /*ext2_inode rootiNode;
         rootiNode = getSectorNumOfiNode(11,  e);
         unsigned char dirInfo[1024];
         readBlock((size_t)rootiNode.i_block[1], dirInfo, e);
-        ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo;
-
-		//readiNodeBitmap(e, bitmap);		
-		//pass one
+        ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo;*/
 		checkDirectoryEntitie(e);	
 	}
-/*	
-		ext2_inode rootiNode;
+	
+/*		ext2_inode rootiNode;
 		rootiNode = getSectorNumOfiNode(2,  e);
 		for(i = 0; i < EXT2_N_BLOCKS; i++){
 			printf("%x ", rootiNode.i_block[i]);
@@ -354,6 +351,12 @@ void checkDirectoryEntitie(partition *e){
 		}
 	}
 	checkUnreferenceNode(e, i, linkmap, &lostfoundNum, false);
+    size_t y;
+	for(y = 0; y < block_size * 8; y++){
+       if(linkmap[y] > 0){
+    //       printf("[%d](%d)\t", y, culmap[y]);
+       }
+	}
     for(i = 2; i < sublk->s_inodes_count; i++){
         ext2_inode inode;
         inode = getSectorNumOfiNode(i,  e);
