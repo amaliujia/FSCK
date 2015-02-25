@@ -98,10 +98,10 @@ void writeBlock(size_t blockId, uchar *buf, partition *p);
 size_t findParentInode(partition *e, size_t inodeNum);
 void writeiNode(ext2_inode *i, size_t inode, partition *p);
 size_t readiNodeBlocks(ext2_inode inode, uchar *buf, partition *p);
-void addDirEntry(ext2_inode *parentDir, size_t lostInode, partition *p); 
+void addDirEntry(size_t parentDirNum, size_t lostInode, partition *p); 
 
 // checker function
 void checkPartition(int partition, char *path, bool checkable); 
 void checkDirectoryEntities(partition *e);
-bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, ext2_inode *lostfound);
+bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *lostfound, bool first);
 #endif

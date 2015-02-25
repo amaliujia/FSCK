@@ -125,10 +125,10 @@ void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from)
 	ssize_t bytes_to_write;
 
 	if (num_sectors == 1) {
-		printf("Reading sector  %"PRId64"\n", start_sector);
+	//	printf("Reading sector  %"PRId64"\n", start_sector);
 	} else {
-		printf("Reading sectors %"PRId64"--%"PRId64"\n",
-			   start_sector, start_sector + (num_sectors - 1));
+	//	printf("Reading sectors %"PRId64"--%"PRId64"\n",
+	//		   start_sector, start_sector + (num_sectors - 1));
 	}
 
 	sector_offset = start_sector * sector_size_bytes;
@@ -210,7 +210,7 @@ int main (int argc, char **argv)
         	 ne = ne->next;
     	}				
 	}else{
-       	PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
+	   	PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
        	if(ext2 == NULL || ext2->p->sys_ind != 0x83){
 		 	 printf("not ext2\n");
            	 errno = 1;
@@ -218,6 +218,13 @@ int main (int argc, char **argv)
        	}
         partition *e = ext2->p;
 	    setSuperBlockArguments(e);
+
+        ext2_inode rootiNode;
+        rootiNode = getSectorNumOfiNode(11,  e);
+        unsigned char dirInfo[1024];
+        readBlock((size_t)rootiNode.i_block[1], dirInfo, e);
+        ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo;
+
 		//readiNodeBitmap(e, bitmap);		
 		//pass one
 		checkDirectoryEntitie(e);	
@@ -253,6 +260,7 @@ void checkDirectoryEntitie(partition *e){
 	size_t last = 0;
 	uchar *bitmap = (uchar *)malloc(sizeof(uchar) * block_size);
 	uchar *culmap = (uchar *)malloc(sizeof(uchar) * (sublk->s_inodes_count + 1));
+	uchar *linkmap = (uchar *)malloc(sizeof(uchar) * (sublk->s_inodes_count + 1));
 	memset(culmap, 0, sublk->s_inodes_count + 1);
 	// read root directory entry into buffer
 	for(i = 3; i < sublk->s_inodes_count; i++){
@@ -302,17 +310,17 @@ void checkDirectoryEntitie(partition *e){
  				printf("Entry '..' in inode (%zu) has invalid inode #: %zu.\nClean? ", i, ddotEntry->inode);
                 size_t n = findParentInode(e, i);
                 if( n == 0)
-                    printf("no\n");
+                	//TODO: how to deal with it
+				    printf("no\n");
                 else{
                     ddotEntry->inode = n;
-                
 				    printf("yes\n");
                 }
 				isError = true;
 			}else if(!isSupDirCorrect(ddotEntry, ddotEntry->inode, e)){
 				printf("Entry '..' in indoe (%zu) has invalid parent inode #: %zu.\nClean? ", i, ddotEntry->inode);
 				size_t n = findParentInode(e, i);
-				if( n == 0)		
+				if(n == 0)		
 					printf("no\n");
 				else{
 					ddotEntry->inode = n;
@@ -326,9 +334,9 @@ void checkDirectoryEntitie(partition *e){
 		}
 	}
 	
-	ext2_inode lostfound;
+	size_t lostfoundNum;
 	
-	checkUnreferenceNode(e, i, culmap, &lostfound);
+	checkUnreferenceNode(e, i, culmap, &lostfoundNum, true);
 /*  size_t y;
     for(y = 0; y < block_size * 8; y++){
        if(culmap[y] > 0){
@@ -341,22 +349,26 @@ void checkDirectoryEntitie(partition *e){
         inode = getSectorNumOfiNode(i,  e);
 		if(inode.i_links_count >= 1 && culmap[i] == 0){
 			printf("Unconnected directory inode %zu\n", i);
-            addDirEntry(&lostfound, i, e);
+            addDirEntry(lostfoundNum, i, e);
+			printf("relink to /lost+found/%d\n", i);
 		}
-//		if(culmap[i] == 0){
-//			continue;
-//		}
-	//	if(inode.i_links_count != (culmap[i])){
-	//		printf("Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, culmap[i]);	
-	//		inode.i_links_count = culmap[i];
-			//writeiNode(&inode, i, e);	
-		//} 
 	}
+	checkUnreferenceNode(e, i, linkmap, &lostfoundNum, false);
+    for(i = 2; i < sublk->s_inodes_count; i++){
+        ext2_inode inode;
+        inode = getSectorNumOfiNode(i,  e);
+		if(inode.i_links_count != linkmap[i]){
+			 printf("Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, linkmap[i]);
+			inode.i_links_count = linkmap[i];
+			writeiNode(&inode, i, e);
+		}	
+	}	
 	
 	if(errno != NORMAL){
 		goto error;
 	}
 done:
+	free(linkmap);
 	free(culmap);
 	free(bitmap);
 	return ;
@@ -457,7 +469,7 @@ size_t findParentInode(partition *e, size_t inodeNum){
 	return 0;
 }  
 
-bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, ext2_inode *lostfound){
+bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *lostfound, bool first){
 	size_t i;
     size_t y;
 	size_t last = 0;
@@ -468,12 +480,15 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, ext2_ino
         last = i;
 	    size_t bitbyte = (i - 1) / 8;
         size_t bitoff = (i - 1) % 8;
-        char target = bitmap[bitbyte];
+       // char target = bitmap[bitbyte];
         //if((target >> (7 - bitoff)) & 0x1 == 0){
          //   continue;
         //}
 		if(i == inodeNum){
 			continue;
+		}
+		if(i == 11){
+			printf("");
 		}
         ext2_inode inode;
         inode = getSectorNumOfiNode(i,  e);
@@ -532,12 +547,18 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, ext2_ino
 			ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
 			size_t off = 0;	
 			while(true){
-				if(strcmp(dir->name, ".") != 0){
-					culmap[dir->inode] += 1;			
+				if(!first){
+					culmap[dir->inode] += 1;
+				}else{
+                	if(strcmp(dir->name, ".") != 0){
+                   		 culmap[dir->inode] += 1;
+                	}
 				}
 				if(strcmp(dir->name, "lost+found") == 0){
-					*lostfound = getSectorNumOfiNode(dir->inode, e);
+					//*lostfound = getSectorNumOfiNode(dir->inode, e);
+					*lostfound = dir->inode;
 				}
+
 				if(off >= dataSize){
 					break;
 				}
@@ -750,7 +771,8 @@ size_t readiNodeBlocks(ext2_inode inode, uchar *buf, partition *p){
               	goto done; 
             }
 			buf = (uchar *)malloc(dataSize);
-            for(y = 0; y < 12; y++){
+            memset(buf, 0, dataSize);
+			for(y = 0; y < 12; y++){
                 if(inode.i_block[y] == 0){
                      break;
                 }
@@ -905,11 +927,59 @@ size_t IntLen(size_t x) {
     return 1;
 }
 
-void addDirEntry(ext2_inode *parentDir, size_t lostInode, partition *p){
-	uchar *buf;
-	size_t dataSize = readiNodeBlocks(*parentDir, buf, p);
-	size_t off = 0;
+void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
+	//size_t dataSize = readiNodeBlocks(*parentDir, buf, p);
+	// new method
+	ext2_inode temp = getSectorNumOfiNode(lostfoundNum, p);
+	ext2_inode *parentDir = &temp;
+	size_t y;
+	size_t dataSize = 0;
+	uchar *singleLink = NULL;
+	for(y = 0; y < 13; y++){
+    	if(parentDir->i_block[y] == 0){
+       		break;
+       	}
+		if(y < 12){
+	   		dataSize += block_size;
+		}else{
+			singleLink = (uchar *)malloc(sizeof(uchar) * block_size);	
+			readBlock(parentDir->i_block[y], singleLink, p);
+			size_t z;
+			for(z = 0; z < block_size / 4; z++){
+				if(*(size_t *)(singleLink) != 0){
+					dataSize += block_size;
+				}else{
+					break;
+				}
+			}
+		}
+	}
+	if(parentDir->i_block[12] != 0){
+		 printf("Yes. it matters\n");
+	}
+    uchar buf[dataSize];
+	for(y = 0; y < 13; y++){
+    	if(parentDir->i_block[y] == 0){
+       		 break;
+	    }
+    	if(y < 12){
+			readBlock((size_t)parentDir->i_block[y], buf + y * block_size, p);
+		}else{
+              	if(singleLink != NULL){
+              		 size_t z;
+              		 for(z = 0; z < block_size / 4; z++){
+                  	    	 if(*(size_t *)(singleLink + z) != 0){
+                   	       	  readBlock(*(size_t *)(singleLink + z), buf + (z + y) * block_size, p); 
+             				}else{
+									break;
+							}
+         			}
+					free(singleLink);
+                }
+		}
+    }
 
+	size_t off = 0;
     ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
     while(true){
          if(off >= dataSize){
@@ -920,21 +990,32 @@ void addDirEntry(ext2_inode *parentDir, size_t lostInode, partition *p){
             dir->inode = lostInode;
 			char str[128];
 			sprintf(str, "%d", lostInode);
-			if(strcmp(str, "31") == 0){
-				printf("sprintf function works\n");
-			}
+			//if(strcmp(str, "31") == 0){
+				//printf("sprintf function works\n");
+		//	}
 			dir->name_len = IntLen(lostInode); 
     	    memcpy(dir->name, str, dir->name_len);
 			dir->file_type = fileType(lost.i_mode);
-			dir->rec_len = 4 + 2 + dir->name_len + 1 + 1;
-			size_t i;
-			for(i = 0; i < 12; i++){
+			dir->rec_len = dir->name_len + 8 + 2;
+			int blockId = off / block_size;
+			writeBlock(parentDir->i_block[blockId], buf + blockId * block_size, p);
+			//test
+		/*	ext2_inode n11 = getSectorNumOfiNode(11, p);
+			uchar n11buf[1024];
+			readBlock(n11.i_block[0], n11buf, p);*/
+	
+			/*for(i = 0; i < 12; i++){
 				if(parentDir->i_block[i] == 0){
 					break;
 				}else{	
 					writeBlock(parentDir->i_block[i], buf + i * block_size, p);
 				}	
-			}					
+			}*/
+			uchar	lostbuf[block_size];
+			readBlock(lost.i_block[0], lostbuf, p);
+			ext2_dir_entry_2 *pdir = (ext2_dir_entry_2 *)(lostbuf + ((ext2_dir_entry_2 *)lostbuf)->rec_len);
+			pdir->inode = lostfoundNum;
+			writeBlock(lost.i_block[0], lostbuf, p);					
 			break; 
 		  }
          if(dir->rec_len == 0){
