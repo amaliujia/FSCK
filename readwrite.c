@@ -233,14 +233,14 @@ int main (int argc, char **argv)
                 setSuperBlockArguments(p);
                 checkDirectoryEntitie(p);	*/	
 	}else{
-	   	PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
-       	if(ext2 == NULL || ext2->p->sys_ind != 0x83){
-		 	 printf("not ext2\n");
-           	 errno = 1;
-           	 goto error;
-       	}
-        partition *e = ext2->p;
-	    setSuperBlockArguments(e);
+	   		PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
+       		if(ext2 == NULL || ext2->p->sys_ind != 0x83){
+		 		 printf("not ext2\n");
+           		 errno = 1;
+           		 goto error;
+       		}
+        	partition *e = ext2->p;
+	    	setSuperBlockArguments(e);
 
         /*ext2_inode rootiNode;
         rootiNode = getSectorNumOfiNode(11,  e);
@@ -495,9 +495,9 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
 	size_t last = 0;
 		
 	for(i = 2; i < sublk->s_inodes_count; i++){	
-		if(i == inodeNum){
-			continue;
-		}
+		//if(i == inodeNum){
+		//	continue;
+		//}
 		if(i == 2010){
 			//printf("This is 2010\n");
 		}
@@ -579,7 +579,8 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
                      }
 				}
 				off += dir->rec_len;
-				dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);		
+				//off += EXT2_DIR_REC_LEN(dir->name_len); 
+				dir = (ext2_dir_entry_2 *)(buf + off);		
 			}					
 		}
 	}
@@ -1015,6 +1016,7 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
 
 	size_t off = 0;
     ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
+	ext2_dir_entry_2 *pre = NULL;
     while(true){
          if(off >= dataSize){
               break;
@@ -1030,9 +1032,18 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
 			dir->name_len = IntLen(lostInode); 
     	    memcpy(dir->name, str, dir->name_len);
 			dir->file_type = fileType(lost.i_mode);
-			dir->rec_len = dir->name_len + 8 + 2;
+			//size_t size = dir->name_len + 8;
+			dir->rec_len = block_size - off;
+			if(pre != NULL){
+				pre->rec_len = EXT2_DIR_REC_LEN(pre->name_len); 
+			}else{
+				printf("How could it be!!!\n");
+			}
 			int blockId = off / block_size;
 			writeBlock(parentDir->i_block[blockId], buf + blockId * block_size, p);
+			if(blockId > 0){
+				writeBlock(parentDir->i_block[blockId - 1], buf + (blockId - 1) * block_size, p);
+			}
 			uchar	lostbuf[block_size];
 			readBlock(lost.i_block[0], lostbuf, p);
 			ext2_dir_entry_2 *pdir = (ext2_dir_entry_2 *)(lostbuf + ((ext2_dir_entry_2 *)lostbuf)->rec_len);
@@ -1040,10 +1051,9 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
 			writeBlock(lost.i_block[0], lostbuf, p);					
 			break; 
 		  }
-         if(dir->rec_len == 0){
-             break;
-         }
-         off += dir->rec_len;
-         dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);
+//         off += dir->rec_len;
+		 off += EXT2_DIR_REC_LEN(dir->name_len);
+		 pre = dir;
+         dir = (ext2_dir_entry_2 *)((char *)buf + off);
   }
 }
