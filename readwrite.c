@@ -183,20 +183,6 @@ int main (int argc, char **argv)
 
 	checkPartition(partitionNum, path, !(partitionNum == -1));
 	
-        /*PTE *ext2 = readPartitionEntity(&ptren, ext2Num);	
-        partition *e = ext2->p;
-    	setSuperBlockArguments(e);
-	    ext2_inode rootiNode;
-        rootiNode = getSectorNumOfiNode(30,  e);
-        for(i = 0; i < EXT2_N_BLOCKS; i++){
-            printf("%x ", rootiNode.i_block[i]);
-        }
-        unsigned char dirInfo[1024];
-        readBlock((size_t)0x2e2f2e2e, dirInfo, e);    
-        ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo; 
-		return;*/ 
-	
-	
 	if(ext2Num == -1){
 		goto done;
 	}else if(ext2Num == 0){
@@ -205,11 +191,11 @@ int main (int argc, char **argv)
     	int i;
     	for(i = 0; i < ptren.count; i++){
        		 if(ne->p->sys_ind  == 0x83){// && i != ptren.count - 1){
-       			printf("\n\n------------------------------\n\n");
+       			printf("------------------------------\n");
 			    p = ne->p;
 				setSuperBlockArguments(p);
 				checkDirectoryEntitie(p);		 
-         	    printf("\n\n------------------------------\n\n");
+         	    printf("------------------------------\n");
 			}
 		/*	if(i == ptren.count - 1){
 				p = ne->p;
@@ -241,12 +227,6 @@ int main (int argc, char **argv)
        		}
         	partition *e = ext2->p;
 	    	setSuperBlockArguments(e);
-
-        /*ext2_inode rootiNode;
-        rootiNode = getSectorNumOfiNode(11,  e);
-        unsigned char dirInfo[1024];
-        readBlock((size_t)rootiNode.i_block[1], dirInfo, e);
-        ext2_dir_entry_2 * dirEntry2 = (ext2_dir_entry_2 *)dirInfo;*/
 			checkDirectoryEntitie(e);	
 		}
 		done:	
@@ -265,22 +245,16 @@ int main (int argc, char **argv)
 		uchar *bitmap = (uchar *)malloc(sizeof(uchar) * block_size);
 		uchar *culmap = (uchar *)malloc(sizeof(uchar) * (sublk->s_inodes_count + 1));
 		uchar *linkmap = (uchar *)malloc(sizeof(uchar) * (sublk->s_inodes_count + 1));
-		//uchar culmap[sublk->s_inodes_count + 1];
-		//uchar linkmap[sublk->s_inodes_count + 1];
 //		uchar bitmap[block_size];
 		memset(culmap, 0, sublk->s_inodes_count + 1);
 		// read root directory entry into buffer
 		for(i = 3; i <= sublk->s_inodes_count; i++){
-//			readiNodeBitmap(e, bitmap, i, last);
 			last = i;
-			size_t bitbyte = (i - 1) / 8;
-			size_t bitoff = (i - 1) % 8;
-			//char target = bitmap[bitbyte];
-		//	if((target >> (7 - bitoff)) & 0x1 == 0){
-		//		continue;
-		//	}
 			ext2_inode inode;			
 			inode = getSectorNumOfiNode(i,  e);
+			if(i == 4109){
+				printf("file\n");
+			}
 			if(isDirectory(inode.i_mode)){
 				if(inode.i_block[0] == 0){
 					continue;
@@ -356,7 +330,7 @@ int main (int argc, char **argv)
 			if(i == 2010){
 				//printf("2010 first\n");		
 			}
-			if(inode.i_links_count > 1 && culmap[i] == 0){
+			if(inode.i_links_count >= 1 && culmap[i] == 0){
 				printf("SkyDragon: Unconnected directory inode %zu\t\t", i);
 				addDirEntry(lostfoundNum, i, e);
 				printf("relink to /lost+found/%d\n", i);
@@ -373,6 +347,7 @@ int main (int argc, char **argv)
 		for(i = 2; i <= sublk->s_inodes_count; i++){
 			ext2_inode inode;
 			inode = getSectorNumOfiNode(i,  e);
+			
 			if(inode.i_links_count != linkmap[i] && inode.i_links_count != 0){
 				 printf("SkyDragon: Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, linkmap[i]);
 				inode.i_links_count = linkmap[i];
@@ -570,10 +545,7 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
 				if(!first){
 					culmap[dir->inode] += 1;
 				}else{
-                	if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..")){
-						if(dir->inode == 2009 || dir->inode == 12){
-//							printf("2009here\n");
-						}
+                	if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
                    		 culmap[dir->inode] += 1;
        	        	}
 	                if(strcmp(dir->name, "lost+found") == 0){
@@ -805,7 +777,6 @@ ext2_inode getSectorNumOfiNode(size_t inode, partition *p){
 	GroupDes groupDes; 
 	readBlockGroupDes(localGroup, &groupDes, p);	
 	size_t blockId = groupDes.bg_inode_table; 
-//		printf("Block id: %zu\n", blockId);
 	ext2_inode i;
 	readiNode(blockId, localIndex, p, &i);
 	if(isDirectory(i.i_mode)){
@@ -1029,13 +1000,10 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
             dir->inode = lostInode;
 			char str[128];
 			sprintf(str, "%d", lostInode);
-			//if(strcmp(str, "31") == 0){
-				//printf("sprintf function works\n");
-		//	}
 			dir->name_len = IntLen(lostInode); 
     	    memcpy(dir->name, str, dir->name_len);
 			dir->file_type = fileType(lost.i_mode);
-			//size_t size = dir->name_len + 8;
+			//TODO: Bug exist
 			dir->rec_len = block_size - off;
 			if(pre != NULL){
 				pre->rec_len = EXT2_DIR_REC_LEN(pre->name_len); 
