@@ -252,9 +252,6 @@ int main (int argc, char **argv)
 			last = i;
 			ext2_inode inode;			
 			inode = getSectorNumOfiNode(i,  e);
-			if(i == 4109){
-				printf("file\n");
-			}
 			if(isDirectory(inode.i_mode)){
 				if(inode.i_block[0] == 0){
 					continue;
@@ -327,17 +324,16 @@ int main (int argc, char **argv)
 		for(i = 3; i <= sublk->s_inodes_count; i++){
 			ext2_inode inode;
 			inode = getSectorNumOfiNode(i,  e);
-			if(i == 2010){
-				//printf("2010 first\n");		
-			}
-			if(inode.i_links_count >= 1 && culmap[i] == 0){
-				printf("SkyDragon: Unconnected directory inode %zu\t\t", i);
-				addDirEntry(lostfoundNum, i, e);
-				printf("relink to /lost+found/%d\n", i);
-			}
+		//	if(isDirectory(inode.i_mode)){
+				if(inode.i_links_count >= 1 && culmap[i] == 0){
+					printf("SkyDragon: Unconnected directory inode %zu\t\t", i);
+					addDirEntry(lostfoundNum, i, e);
+					printf("relink to /lost+found/%d\n", i);
+				}
+		//	}
 		}
         memset(linkmap, 0, sublk->s_inodes_count + 1);
-		checkUnreferenceNode(e, i, linkmap, &lostfoundNum, false);
+        checkUnreferenceNode(e, i, linkmap, &lostfoundNum, false);	
 		size_t y;
 		for(y = 0; y < block_size * 8; y++){
 		   //if(linkmap[y] > 0){
@@ -348,7 +344,7 @@ int main (int argc, char **argv)
 			ext2_inode inode;
 			inode = getSectorNumOfiNode(i,  e);
 			
-			if(inode.i_links_count != linkmap[i] && inode.i_links_count != 0){
+			if(inode.i_links_count != linkmap[i] && inode.i_links_count > 0){
 				 printf("SkyDragon: Inode %d ref count is %d, should be %d\n", i, inode.i_links_count, linkmap[i]);
 				inode.i_links_count = linkmap[i];
 				writeiNode(&inode, i, e);
@@ -356,7 +352,7 @@ int main (int argc, char **argv)
 		}	
 		//memset(culmap, 0, sublk->s_inodes_count + 1);	
 		for(i = 2; i <= sublk->s_inodes_count; i++){
-			readiNodeBitmap(e, bitmap, i, 0);
+	//		readiNodeBitmap(e, bitmap, i, 0);
 		}	
 			
 		if(errno != NORMAL){
@@ -548,11 +544,10 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
                 	if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
                    		 culmap[dir->inode] += 1;
        	        	}
-	                if(strcmp(dir->name, "lost+found") == 0){
-                   //*lostfound = getSectorNumOfiNode(dir->inode, e);
-                        *lostfound = dir->inode;
-                     }
 				}
+                if(strcmp(dir->name, "lost+found") == 0){
+                     *lostfound = dir->inode;
+                }
 				off += dir->rec_len;
 				//off += EXT2_DIR_REC_LEN(dir->name_len); 
 				dir = (ext2_dir_entry_2 *)(buf + off);		
