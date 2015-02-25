@@ -260,7 +260,9 @@ int main (int argc, char **argv)
 		size_t i;
 		int errno = NORMAL;
 		size_t last = 0;
-	//	uchar *bitmap = (uchar *)malloc(sizeof(uchar) * block_size);
+		
+	   //uchar bitmap[block_size];
+		uchar *bitmap = (uchar *)malloc(sizeof(uchar) * block_size);
 		uchar *culmap = (uchar *)malloc(sizeof(uchar) * (sublk->s_inodes_count + 1));
 		uchar *linkmap = (uchar *)malloc(sizeof(uchar) * (sublk->s_inodes_count + 1));
 		//uchar culmap[sublk->s_inodes_count + 1];
@@ -268,7 +270,7 @@ int main (int argc, char **argv)
 //		uchar bitmap[block_size];
 		memset(culmap, 0, sublk->s_inodes_count + 1);
 		// read root directory entry into buffer
-		for(i = 3; i < sublk->s_inodes_count; i++){
+		for(i = 3; i <= sublk->s_inodes_count; i++){
 //			readiNodeBitmap(e, bitmap, i, last);
 			last = i;
 			size_t bitbyte = (i - 1) / 8;
@@ -340,7 +342,6 @@ int main (int argc, char **argv)
 		}
 		
 		size_t lostfoundNum;
-		
 		checkUnreferenceNode(e, i, culmap, &lostfoundNum, true);
 	/*  size_t y;
 		for(y = 0; y < block_size * 8; y++){
@@ -349,7 +350,7 @@ int main (int argc, char **argv)
 		   }
 		}*/
 		
-		for(i = 3; i < sublk->s_inodes_count; i++){
+		for(i = 3; i <= sublk->s_inodes_count; i++){
 			ext2_inode inode;
 			inode = getSectorNumOfiNode(i,  e);
 			if(i == 2010){
@@ -361,14 +362,15 @@ int main (int argc, char **argv)
 				printf("relink to /lost+found/%d\n", i);
 			}
 		}
+        memset(linkmap, 0, sublk->s_inodes_count + 1);
 		checkUnreferenceNode(e, i, linkmap, &lostfoundNum, false);
 		size_t y;
 		for(y = 0; y < block_size * 8; y++){
-		   if(linkmap[y] > 0){
-			//   printf("[%d](%d)\t", y, linkmap[y]);
-		   }
+		   //if(linkmap[y] > 0){
+		 	//  printf("[%d](%d)\t", y, linkmap[y]);
+		   //}
 		}
-		for(i = 2; i < sublk->s_inodes_count; i++){
+		for(i = 2; i <= sublk->s_inodes_count; i++){
 			ext2_inode inode;
 			inode = getSectorNumOfiNode(i,  e);
 			if(inode.i_links_count != linkmap[i] && inode.i_links_count != 0){
@@ -377,16 +379,21 @@ int main (int argc, char **argv)
 				writeiNode(&inode, i, e);
 			}	
 		}	
-		
+		//memset(culmap, 0, sublk->s_inodes_count + 1);	
+		for(i = 2; i <= sublk->s_inodes_count; i++){
+			readiNodeBitmap(e, bitmap, i, 0);
+		}	
+			
 		if(errno != NORMAL){
 			goto error;
 		}
 	done:
-		//free(linkmap);
-		//free(culmap);
-		//free(bitmap);
+		free(linkmap);
+		free(culmap);
+		free(bitmap);
 		return ;
 	error:
+	    goto done;
 		switch(errno){
 			case DIR_ENTRY_DOT_NOTEXIST:
 			break;
@@ -396,8 +403,7 @@ int main (int argc, char **argv)
 			break;
 		default:
 			break; 
-	}	
-	goto done;		
+		}	
 }
 
 size_t findParentInode(partition *e, size_t inodeNum){
@@ -487,17 +493,8 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
 	size_t i;
     size_t y;
 	size_t last = 0;
-	uchar bitmap[block_size];
 		
 	for(i = 2; i < sublk->s_inodes_count; i++){	
-        readiNodeBitmap(e, bitmap, i, last);
-        last = i;
-	    size_t bitbyte = (i - 1) / 8;
-        size_t bitoff = (i - 1) % 8;
-       // char target = bitmap[bitbyte];
-        //if((target >> (7 - bitoff)) & 0x1 == 0){
-         //   continue;
-        //}
 		if(i == inodeNum){
 			continue;
 		}
@@ -561,26 +558,25 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
 			ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
 			size_t off = 0;	
 			while(true){
+                if(off >= dataSize){
+                    break;
+                }
+                if(dir->inode == 0){
+                    break;
+                }
+                if(dir->rec_len == 0){
+                    break;
+                }	
 				if(!first){
 					culmap[dir->inode] += 1;
 				}else{
                 	if(strcmp(dir->name, ".") != 0){
                    		 culmap[dir->inode] += 1;
-                	}
-				}
-				if(strcmp(dir->name, "lost+found") == 0){
-					//*lostfound = getSectorNumOfiNode(dir->inode, e);
-					*lostfound = dir->inode;
-				}
-
-				if(off >= dataSize){
-					break;
-				}
-				if(dir->inode == 0){
-					break;
-				}
-				if(dir->rec_len == 0){
-					break;
+       	        	}
+	                if(strcmp(dir->name, "lost+found") == 0){
+                   //*lostfound = getSectorNumOfiNode(dir->inode, e);
+                        *lostfound = dir->inode;
+                     }
 				}
 				off += dir->rec_len;
 				dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);		
@@ -885,16 +881,38 @@ bool inline isDirectoryNameMatch(char *name, ext2_dir_entry_2 *entry){
 	return false;
 }
 
-void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last){
-	if(last == 0){
-	    size_t inodesPerGourp = sublk->s_inodes_per_group;
-   		size_t localGroup = (inode - 1) / inodesPerGourp;
-    	GroupDes groupDes; 
-    	readBlockGroupDes(localGroup, &groupDes, e);
-		size_t blockId = groupDes.bg_inode_table;			
-		readBlock(blockId, bitmap, e);
-		return;
-	}
+void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last){
+            ext2_inode inode;
+            inode = getSectorNumOfiNode(inodeNum,  e);
+			bool isError = false;
+            uchar y;
+			for(y = 0; y < 15; y++){
+                if(inode.i_block[y] == 0){
+                    break;
+                }
+				if(inode.i_block[y] > sublk->s_blocks_count){
+					continue;	
+				}
+                size_t blockId = inode.i_block[y];
+		        size_t inodesPerGourp = sublk->s_blocks_per_group;
+       			size_t localGroup = (blockId - 1) / inodesPerGourp;
+		        GroupDes groupDes;
+       			readBlockGroupDes(localGroup, &groupDes, e);
+		        size_t id = groupDes.bg_block_bitmap;
+       			memset(bitmap, 0, block_size);
+		        readBlock(id, bitmap, e);
+                size_t localIndex = (blockId - 1) % inodesPerGourp;
+                size_t bitbyte = localIndex / 8;
+                size_t bitoff = localIndex % 8;
+                uchar target = bitmap[bitbyte];
+                if(((target >> (7 - bitoff)) & 0x1) == 0){
+                    printf("SkyDragon: block id %d unalloc  Fix?", id);    
+					bitmap[bitbyte] = (target | (0x1 << (7 - bitoff))); 
+                	writeBlock(id, bitmap, e);
+					printf("yes\n");
+				}
+            }
+/*	}
     size_t inodesPerGourp = sublk->s_inodes_per_group;
     size_t localGroup = (inode - 1) / inodesPerGourp;
 	size_t lastGroup = (last - 1) / inodesPerGourp;
@@ -904,7 +922,7 @@ void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last){
     GroupDes groupDes;
     readBlockGroupDes(localGroup, &groupDes, e);
     size_t blockId = groupDes.bg_inode_table;
-    readBlock(blockId, bitmap, e);			
+    readBlock(blockId, bitmap, e);		*/	
 }
 
 
@@ -1015,18 +1033,6 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
 			dir->rec_len = dir->name_len + 8 + 2;
 			int blockId = off / block_size;
 			writeBlock(parentDir->i_block[blockId], buf + blockId * block_size, p);
-			//test
-		/*	ext2_inode n11 = getSectorNumOfiNode(11, p);
-			uchar n11buf[1024];
-			readBlock(n11.i_block[0], n11buf, p);*/
-	
-			/*for(i = 0; i < 12; i++){
-				if(parentDir->i_block[i] == 0){
-					break;
-				}else{	
-					writeBlock(parentDir->i_block[i], buf + i * block_size, p);
-				}	
-			}*/
 			uchar	lostbuf[block_size];
 			readBlock(lost.i_block[0], lostbuf, p);
 			ext2_dir_entry_2 *pdir = (ext2_dir_entry_2 *)(lostbuf + ((ext2_dir_entry_2 *)lostbuf)->rec_len);
