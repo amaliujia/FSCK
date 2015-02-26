@@ -350,10 +350,38 @@ int main (int argc, char **argv)
 				writeiNode(&inode, i, e);
 			}	
 		}	
-		//memset(culmap, 0, sublk->s_inodes_count + 1);	
-		for(i = 2; i <= sublk->s_inodes_count; i++){
-	//		readiNodeBitmap(e, bitmap, i, 0);
-		}	
+		
+		uchar *blockmap = (uchar *)malloc(sizeof(uchar) * sublk->s_blocks_count + 1);	
+		memset(blockmap, 0, sublk->s_blocks_count + 1); 
+		
+		/*for(i = 2; i <= sublk->s_inodes_count; i++){
+			readiNodeBitmap(e, bitmap, i, 0, blockmap);
+		}
+
+		for(y = 1; y <= sublk->s_blocks_count; y++){
+			
+		}
+		for(i = 1; i <= sublk->s_blocks_count; i++){
+			size_t blockId = i;
+			//locate on each bit
+                size_t inodesPerGourp = sublk->s_blocks_per_group;
+                size_t localGroup = (blockId - 1) / inodesPerGourp;
+                GroupDes groupDes;
+                readBlockGroupDes(localGroup, &groupDes, e);
+                size_t id = groupDes.bg_block_bitmap;
+                memset(bitmap, 0, block_size);
+                readBlock(id, bitmap, e);
+                size_t localIndex = (blockId - 1) % inodesPerGourp;
+                size_t bitbyte = localIndex / 8;
+                size_t bitoff = localIndex % 8;
+                uchar target = bitmap[bitbyte];
+                if(((target >> (7 - bitoff)) & 0x1) == 1 && blockmap[blockId] == 0){
+                    printf("SkyDragon: block id %d misalloc  Fix?", id);
+                    bitmap[bitbyte] = (target & (~(0x1 << (7 - bitoff))));
+                    writeBlock(id, bitmap, e);
+                    printf("yes\n");
+                }				
+		}*/	
 			
 		if(errno != NORMAL){
 			goto error;
@@ -851,7 +879,7 @@ bool inline isDirectoryNameMatch(char *name, ext2_dir_entry_2 *entry){
 	return false;
 }
 
-void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last){
+void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last, uchar *blockmap){
             ext2_inode inode;
             inode = getSectorNumOfiNode(inodeNum,  e);
 			bool isError = false;
@@ -864,7 +892,10 @@ void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last){
 					continue;	
 				}
                 size_t blockId = inode.i_block[y];
-		        size_t inodesPerGourp = sublk->s_blocks_per_group;
+		        if(blockmap[blockId] == 0){
+					blockmap[blockId] += 1;
+				}
+				size_t inodesPerGourp = sublk->s_blocks_per_group;
        			size_t localGroup = (blockId - 1) / inodesPerGourp;
 		        GroupDes groupDes;
        			readBlockGroupDes(localGroup, &groupDes, e);

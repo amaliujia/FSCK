@@ -92,7 +92,7 @@ void print_sector (unsigned char *buf);
 void read_sectors (int64_t start_sector, unsigned int num_sectors, void *into);
 void write_sectors (int64_t start_sector, unsigned int num_sectors, void *from);
 PTE *readPartitionEntity(ptrEntities *ptren, int i);
-void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last);
+void readiNodeBitmap(partition *e, uchar *bitmap, size_t inode, size_t last, uchar *blockmap);
 void writeBlock(size_t blockId, uchar *buf, partition *p);
 size_t findParentInode(partition *e, size_t inodeNum);
 void writeiNode(ext2_inode *i, size_t inode, partition *p);
