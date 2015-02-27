@@ -9,7 +9,7 @@
  */
 #include "myfsck.h"
 
-//#define DEBUG
+#define DEBUG
 
 #if defined(__FreeBSD__)
 #define lseek64 lseek
@@ -364,31 +364,6 @@ int main (int argc, char **argv)
 		for(i = 2; i <= sublk->s_inodes_count; i++){
 			//readiNodeBitmap(e, bitmap, i, 0, blockmap);
 		}
-/*
-		for(y = 1; y <= sublk->s_blocks_count; y++){
-			
-		}
-		for(i = 1; i <= sublk->s_blocks_count; i++){
-			size_t blockId = i;
-			//locate on each bit
-                size_t inodesPerGourp = sublk->s_blocks_per_group;
-                size_t localGroup = (blockId - 1) / inodesPerGourp;
-                GroupDes groupDes;
-                readBlockGroupDes(localGroup, &groupDes, e);
-                size_t id = groupDes.bg_block_bitmap;
-                memset(bitmap, 0, block_size);
-                readBlock(id, bitmap, e);
-                size_t localIndex = (blockId - 1) % inodesPerGourp;
-                size_t bitbyte = localIndex / 8;
-                size_t bitoff = localIndex % 8;
-                uchar target = bitmap[bitbyte];
-                if(((target >> (7 - bitoff)) & 0x1) == 1 && blockmap[blockId] == 0){
-                    printf("SkyDragon: block id %d misalloc  Fix?", id);
-                    bitmap[bitbyte] = (target & (~(0x1 << (7 - bitoff))));
-                    writeBlock(id, bitmap, e);
-                    printf("yes\n");
-                }				
-		}*/	
 			
 		if(errno != NORMAL){
 			goto error;
@@ -918,65 +893,100 @@ void initGroupBitmap(uchar *bitmap){
 
 void checkBitmap(uchar *map1, uchar *map2, int c){
 	size_t i;
-	for(i = 0; i < block_size; i++){
-		if(map1[i] != map2[i]){
-			printf("[%zu]%x %x  ", i + c * 1024, map1[i], map2[i]);
-		}
+	for(i = 0; i < block_size * 8; i++){
+//		if(map1[i] != map2[i]){
+//			printf("[%zu]%x %x  ", i + c * 1024, map1[i], map2[i]);
+//		}
+                //size_t bitbyte = i / 8;
+              //size_t bitoff = localIndex % 8
 	}
-	printf("\n");
+//	printf("\n");
+}
+
+void setLongBitmap(size_t blockId, partition *e, ext2_inode *inode){
+       uchar cmap[block_size];
+       size_t inodesPerGourp = sublk->s_blocks_per_group;
+       size_t localGroup = (blockId - 1) / inodesPerGourp;
+       GroupDes groupDes;
+       readBlockGroupDes(localGroup, &groupDes, e);
+       size_t id = groupDes.bg_block_bitmap;
+                memset(cmap, 0, block_size);
+                readBlock(id, cmap, e);
+                size_t localIndex = (blockId - 1) % inodesPerGourp;
+                size_t bitbyte = localIndex / 8;
+                size_t bitoff = localIndex % 8;
+                uchar target = cmap[bitbyte];
+                if(((target >> (7 - bitoff)) & 0x1) == 0){
+                    printf("SkyDragon: block id %d unalloc  Fix?", blockId);
+                    cmap[bitbyte] = (target | (0x1 << (7 - bitoff)));
+                    writeBlock(id, cmap, e);
+                    printf("yes\n");
+      }
 }
 
 void checkDoubleBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e, int curIndex){
 	uchar *buf = (uchar *)malloc(block_size);
 	uchar *singleLink = (uchar *)malloc(block_size);
 	if(cur->i_block[curIndex] == 0){
-		printf("block %d is 0 but numBlock not zero\n", curIndex + 1);
+	//	printf("block %d is 0 but numBlock not zero\n", curIndex + 1);
 		goto done;
 	}
-	setBitmap(cur->i_block[curIndex], bitmap);
+	if(cur->i_block[curIndex] == 0x83f){
+		printf("This is this staff\n");
+	}
+
+    if(cur->i_block[curIndex] == 2137){
+             printf("This is %zu\n", 2137);
+    }
+	setLongBitmap(cur->i_block[curIndex], e, cur);
+	//setBitmap(cur->i_block[curIndex], bitmap);
 	readBlock(cur->i_block[curIndex], buf, e);
     size_t max = block_size / 4;
     size_t i = 0;
     while((*num) > 0 && i < max){
         (*num) -= 1;
         #ifdef DEBUG
-        if(*(__u32 *)((void *)buf + i * 4) == 18511){
+        if(*(unsigned int *)((void *)buf + i * 4) == 2137){
             printf("this way\n");
         }
         #endif
 
 		if(*(__u32 *)((void *)buf + i * 4) == 0){
         	#ifdef DEBUG
-		    printf("block 14-1 is 0 but numBlock not zero\n");
+		//    printf("block 14-1 is 0 but numBlock not zero\n");
             #endif
 			i++;
-			//continue;
-			goto done;
+			continue;
+			//goto done;
         }
-		setBitmap(*(__u32 *)((void *)buf + i * 4), bitmap);	 
-		readBlock(*(__u32 *)((void *)buf + i * 4), singleLink, e);
-		//(*num) -= 1;
+		setLongBitmap(*(unsigned int  *)((void *)buf + i * 4), e, cur);
+		//setBitmap(*(__u32 *)((void *)buf + i * 4), bitmap);	 
+		readBlock(*(unsigned int *)((void *)buf + i * 4), singleLink, e);
+		(*num) -= 1;
 
 		size_t inMax = block_size / 4;
 		size_t j = 0;	
 		while((*num) > 0 && j < inMax){
 			(*num) -= 1;
         	#ifdef DEBUG
-        	if(*(__u32 *)((void *)singleLink + j * 4) == 18511){
+        	if(*(unsigned int *)((void *)singleLink + j * 4) == 2137){
            		 printf("this way\n");
         	}
         	#endif
-        	if(*(__u32 *)((void *)singleLink + j * 4) == 0){
+        	if(*(unsigned int *)((void *)singleLink + j * 4) == 0){
 				 #ifdef DEBUG
-           		 printf("block 14-1 is 0 but numBlock not zero\n");
+           	//	 printf("block 14-1 is 0 but numBlock not zero\n");
             	 #endif
 				 j++;
-            	//continue;
-            	goto done;
-        	}
-		    setBitmap(*(__u32 *)((void *)singleLink + j * 4) , bitmap);						j++;	
+            	continue;
+            	//goto done;
+        	}	
+			setLongBitmap(*(unsigned int *)((void *)singleLink + j * 4) , e, cur);
+		    j++;
+			//setBitmap(*(__u32 *)((void *)singleLink + j * 4) , bitmap);						j++;	
 			//(*num) -= 1;
 		}
+		i++;
 		if((*num) == 0){
 			goto done;
 		}		
@@ -986,7 +996,7 @@ void checkDoubleBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e, i
             goto done;
      }
 	if(curIndex != 14){
-		checkDoubleBlock(num, cur, bitmap, e, 14);		
+	//	checkDoubleBlock(num, cur, bitmap, e, 14);		
 	}	
 done:
 	free(buf);
@@ -996,9 +1006,10 @@ done:
 void checkindirectblock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e){
 	uchar *singlelink = (uchar *)malloc(block_size);
 	if(cur->i_block[12] == 0){
-		printf("block 12 is 0 but numblock not zero\n");
+	//	printf("block 12 is 0 but numblock not zero\n");
 		goto done;
 	}
+	setLongBitmap(cur->i_block[12], e, cur);
 	setBitmap(cur->i_block[12], bitmap);
 	readBlock(cur->i_block[12], singlelink, e);
 	size_t max = block_size / 4;
@@ -1006,18 +1017,19 @@ void checkindirectblock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e)
     while((*num) > 0 && i < max){
 		(*num) -= 1;
 		#ifdef DEBUG 
-		if(*(__u32 *)((void *)singlelink + i * 4) == 18511){
+		if(*(__u32 *)((void *)singlelink + i * 4) == 2142){
 			printf("this way\n");
 		}
 		#endif	
 		if(*(__u32 *)((void *)singlelink + i * 4) == 0){
         	#ifdef DEBUG
-			printf("block 13 is 0 but numblock not zero\n");
+		//	printf("block 13 is 0 but numblock not zero\n");
 			#endif
 			i++;
-			//continue;
-			goto done;
-		}	
+			continue;
+			//goto done;
+		}
+		setLongBitmap(*(__u32 *)((void *)singlelink + i * 4), e, cur);	
         setBitmap(*(__u32 *)((void *)singlelink + i * 4) , bitmap);
 		i++;
 		//(*num) -= 1;	
@@ -1037,7 +1049,7 @@ void checkDirectBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e){
 	while((*num) > 0 && i < 12){
 		(*num) -= 1;
         #ifdef DEBUG
-        if(cur->i_block[i] == 18511){
+        if(cur->i_block[i] == 2142){
             printf("this way\n");
         }
         #endif
@@ -1046,12 +1058,13 @@ void checkDirectBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e){
 			printf("It happensin direct block\n");
 			#endif
 			i++;
-			//continue;	
-			return;	
+			continue;	
+			//return;	
 		}
+		setLongBitmap(cur->i_block[i], e, cur);
 		setBitmap(cur->i_block[i], bitmap);
 		i++;
-		//(*num) -= 1;
+		(*num) -= 1;
 	}
 	if((*num) == 0){
 		return;
@@ -1062,7 +1075,7 @@ void checkDirectBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e){
 void checkiNode(size_t i, uchar *bitmap,  partition *e){
         ext2_inode cur = getSectorNumOfiNode(i, e);
         if((cur.i_mode & 0xf000) == EXT2_S_IFLNK){
-            //continue;
+           // continue;
         }
         if((cur.i_mode & 0xf000) == 0){
             //continue;
@@ -1171,8 +1184,8 @@ void checkBlockBitmap(partition *e){
 	uchar bitmap[block_size * 3];
 	initGroupBitmap(bitmap);
 	size_t localGroup, localIndex;
-	checkDirTree(e, bitmap, 2);	
-	/*for(i = 2; i <= sublk->s_inodes_count; i++){	
+	//checkDirTree(e, bitmap, 2);	
+	for(i = 2; i <= sublk->s_inodes_count; i++){	
      size_t totoalBlocks = sublk->s_blocks_count;
     size_t blocksPerGroup = sublk->s_blocks_per_group;
     size_t inodesPerGroup = sublk->s_inodes_per_group;
@@ -1188,8 +1201,10 @@ void checkBlockBitmap(partition *e){
 		}
 		int numBlocks = cur.i_blocks / (2 << sublk->s_log_block_size); 
 		checkDirectBlock(&numBlocks, &cur, bitmap, e); 
-	}*/
-	writeBitmap(bitmap, e);	
+	}
+
+	
+//	writeBitmap(bitmap, e);	
 }
 
 /*void checkBlockBitmap(partition *e){
@@ -1315,56 +1330,38 @@ void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last, 
 					continue;	
 				}
                 size_t blockId = inode.i_block[y];
-		        if(blockmap[blockId] == 0){
-					blockmap[blockId] += 1;
+				if(blockId == 2137){
+					printf("This is %zu\n", 2137);
 				}
 				if(y < 12){
-				size_t inodesPerGourp = sublk->s_blocks_per_group;
-       			size_t localGroup = (blockId - 1) / inodesPerGourp;
-		        GroupDes groupDes;
-       			readBlockGroupDes(localGroup, &groupDes, e);
-		        size_t id = groupDes.bg_block_bitmap;
-       			memset(bitmap, 0, block_size);
-		        readBlock(id, bitmap, e);
-                size_t localIndex = (blockId - 1) % inodesPerGourp;
-                size_t bitbyte = localIndex / 8;
-                size_t bitoff = localIndex % 8;
-                uchar target = bitmap[bitbyte];
-                if(((target >> (7 - bitoff)) & 0x1) == 0){
-                    printf("SkyDragon: block id %d unalloc  Fix?", id);    
-					bitmap[bitbyte] = (target | (0x1 << (7 - bitoff))); 
-                	writeBlock(id, bitmap, e);
-					printf("yes\n");
-				}
+					setLongBitmap(blockId, e, &inode);
 				}else if(y == 12){
                     uchar *singleLink = (uchar *)malloc(sizeof(uchar) * block_size);
-                    readBlock(inode.i_block[y], singleLink, e);
-                    __u32 dblock[block_size / 4];
-                    memcpy(dblock, singleLink, block_size);
+				  if(inode.i_block[y]== 2137){
+                    printf("This is %zu\n", 2137);
+                   }
+				  //if(inode.i_block[12] == 0x83f){
+				//	 printf("This is this stuff\n"); 
+				 // }
+				 //	printf("%x\n", inode.i_block[12]);
+                    setLongBitmap(inode.i_block[y], e, &inode);
+					readBlock(inode.i_block[y], singleLink, e);
+                   // __u32 dblock[block_size / 4];
+                    unsigned int  dblock[block_size / 4]; 
+					memcpy(dblock, singleLink, block_size);
                     size_t z;
                     for(z = 0; z < block_size / 4; z++){
                         if(dblock[z] != 0){
-                            size_t blockId = dblock[z];
-   				             size_t inodesPerGourp = sublk->s_blocks_per_group;
-               				 size_t localGroup = (blockId - 1) / inodesPerGourp;
-			                GroupDes groupDes;
-           				     readBlockGroupDes(localGroup, &groupDes, e);
-               				 size_t id = groupDes.bg_block_bitmap;
-          				      memset(bitmap, 0, block_size);
-                			readBlock(id, bitmap, e);
-                			size_t localIndex = (blockId - 1) % inodesPerGourp;
-                			size_t bitbyte = localIndex / 8;
-                			size_t bitoff = localIndex % 8;
-                			uchar target = bitmap[bitbyte];
-                				if(((target >> (7 - bitoff)) & 0x1) == 0){
-                    			printf("SkyDragon: block id %d unalloc  Fix?", id);
-		                    	bitmap[bitbyte] = (target | (0x1 << (7 - bitoff)));
-       	           			  	writeBlock(id, bitmap, e);
-                    			printf("yes\n");
-                			}
+				  			if(dblock[z] == 2137){
+                    			printf("This is %zu\n", 2137);
+               	 			}	
+							setLongBitmap(dblock[z], e, &inode);
 						}
 					}
-            	}
+            	}else if(y == 13){
+					int numBlocks = inode.i_blocks / (2 << sublk->s_log_block_size) - 12;
+					checkDoubleBlock(&numBlocks, &inode, NULL, e, 13);   
+				}
 	}
 }
 
