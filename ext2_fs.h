@@ -282,6 +282,7 @@ struct ext2_inode {
 
 typedef struct ext2_inode ext2_inode;
 
+
 #define i_size_high     i_dir_acl
 
 #if defined(__KERNEL__) || defined(__linux__)

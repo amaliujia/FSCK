@@ -9,6 +9,8 @@
  */
 #include "myfsck.h"
 
+//#define DEBUG
+
 #if defined(__FreeBSD__)
 #define lseek64 lseek
 #endif
@@ -353,11 +355,16 @@ int main (int argc, char **argv)
 		
 		uchar *blockmap = (uchar *)malloc(sizeof(uchar) * sublk->s_blocks_count + 1);	
 		memset(blockmap, 0, sublk->s_blocks_count + 1); 
-		
-		/*for(i = 2; i <= sublk->s_inodes_count; i++){
-			readiNodeBitmap(e, bitmap, i, 0, blockmap);
-		}
 
+		#ifdef DEBUG	
+		printf("block number %d\n", sublk->s_blocks_count + 1);	
+		#endif 		
+
+	checkBlockBitmap(e);
+		for(i = 2; i <= sublk->s_inodes_count; i++){
+			//readiNodeBitmap(e, bitmap, i, 0, blockmap);
+		}
+/*
 		for(y = 1; y <= sublk->s_blocks_count; y++){
 			
 		}
@@ -429,7 +436,8 @@ size_t findParentInode(partition *e, size_t inodeNum){
                     readBlock(inode.i_block[y], singleLink, e);
                     size_t z;
                     for(z = 0; z < block_size / 4; z++){
-                        if(*(size_t *)(singleLink) != 0){
+						//change
+                        if(*(__u32 *)(singleLink + z * 4) != 0){
 							dataSize += block_size;
 						}else{
 							break;
@@ -453,9 +461,10 @@ size_t findParentInode(partition *e, size_t inodeNum){
 				}else{
                 	if(singleLink != NULL){
                    		 size_t z;
+						//change
                    		 for(z = 0; z < block_size / 4; z++){
-                   	    	 if(*(size_t *)(singleLink + z) != 0){
-                   	       	  readBlock(*(size_t *)(singleLink + z), buf + (z + y) * block_size, e); 
+                   	    	 if(*(__u32 *)(singleLink + z * 4) != 0){
+                   	       	  readBlock(*(__u32 *)(singleLink + z * 4), buf + (z + y) * block_size, e); 
                    	     	}else{
 								break;
 							}
@@ -518,7 +527,7 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
 					readBlock(inode.i_block[y], singleLink, e);
 					size_t z;
 					for(z = 0; z < block_size / 4; z++){
-						if(*(size_t *)(singleLink) != 0){
+						if(*(__u32 *)(singleLink + z * 4) != 0){
 							dataSize += block_size;
 						}else{
 							break;
@@ -543,8 +552,8 @@ bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *
                 	if(singleLink != NULL){
                    		 size_t z;
                    		 for(z = 0; z < block_size / 4; z++){
-                   	    	 if(*(size_t *)(singleLink + z) != 0){
-                   	       	  readBlock(*(size_t *)(singleLink + z), buf + (z + y) * block_size, e); 
+                   	    	 if(*(__u32 *)(singleLink + z * 4) != 0){
+                   	       	  readBlock(*(__u32 *)(singleLink + z * 4), buf + (z + y) * block_size, e); 
                    	     	}else{
 								break;
 							}
@@ -710,7 +719,7 @@ void readiNode(size_t blockid, size_t localIndex, partition *p, ext2_inode *i){
 }	
 
 void readBlock(size_t blockid, uchar *buf, partition *p){
-    read_sectors(p->start_sect + (blockid) * 2, 2, buf);
+	read_sectors(p->start_sect + (blockid) * 2, 2, buf);
 }
 
 void writeBlock(size_t blockid, uchar *buf, partition *p){
@@ -879,11 +888,425 @@ bool inline isDirectoryNameMatch(char *name, ext2_dir_entry_2 *entry){
 	return false;
 }
 
+void setBitmap(size_t blockId, uchar *bitmap){
+    size_t bitbyte = (blockId - 1) / 8;
+    size_t bitoff = (blockId - 1) % 8;
+    bitmap[bitbyte] |= (0x1 << (7 - bitoff));
+}
+
+
+void initGroupBitmap(uchar *bitmap){
+ 	memset(bitmap, 0, block_size * 3);
+//first block
+	size_t i;
+	for(i = 1; i <= 255; i++){
+		setBitmap(i, bitmap);	
+	}
+
+//second one
+	for(i = 8193; i <= 8447; i++){
+		setBitmap(i, bitmap);
+	}
+
+	setBitmap(16385, bitmap);
+	setBitmap(16386, bitmap);
+		
+	for(i = 16389; i <= 16639; i++){
+		setBitmap(i, bitmap);
+	}
+}
+
+void checkBitmap(uchar *map1, uchar *map2, int c){
+	size_t i;
+	for(i = 0; i < block_size; i++){
+		if(map1[i] != map2[i]){
+			printf("[%zu]%x %x  ", i + c * 1024, map1[i], map2[i]);
+		}
+	}
+	printf("\n");
+}
+
+void checkDoubleBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e, int curIndex){
+	uchar *buf = (uchar *)malloc(block_size);
+	uchar *singleLink = (uchar *)malloc(block_size);
+	if(cur->i_block[curIndex] == 0){
+		printf("block %d is 0 but numBlock not zero\n", curIndex + 1);
+		goto done;
+	}
+	setBitmap(cur->i_block[curIndex], bitmap);
+	readBlock(cur->i_block[curIndex], buf, e);
+    size_t max = block_size / 4;
+    size_t i = 0;
+    while((*num) > 0 && i < max){
+        (*num) -= 1;
+        #ifdef DEBUG
+        if(*(__u32 *)((void *)buf + i * 4) == 18511){
+            printf("this way\n");
+        }
+        #endif
+
+		if(*(__u32 *)((void *)buf + i * 4) == 0){
+        	#ifdef DEBUG
+		    printf("block 14-1 is 0 but numBlock not zero\n");
+            #endif
+			i++;
+			//continue;
+			goto done;
+        }
+		setBitmap(*(__u32 *)((void *)buf + i * 4), bitmap);	 
+		readBlock(*(__u32 *)((void *)buf + i * 4), singleLink, e);
+		//(*num) -= 1;
+
+		size_t inMax = block_size / 4;
+		size_t j = 0;	
+		while((*num) > 0 && j < inMax){
+			(*num) -= 1;
+        	#ifdef DEBUG
+        	if(*(__u32 *)((void *)singleLink + j * 4) == 18511){
+           		 printf("this way\n");
+        	}
+        	#endif
+        	if(*(__u32 *)((void *)singleLink + j * 4) == 0){
+				 #ifdef DEBUG
+           		 printf("block 14-1 is 0 but numBlock not zero\n");
+            	 #endif
+				 j++;
+            	//continue;
+            	goto done;
+        	}
+		    setBitmap(*(__u32 *)((void *)singleLink + j * 4) , bitmap);						j++;	
+			//(*num) -= 1;
+		}
+		if((*num) == 0){
+			goto done;
+		}		
+    }
+
+    if((*num) == 0){
+            goto done;
+     }
+	if(curIndex != 14){
+		checkDoubleBlock(num, cur, bitmap, e, 14);		
+	}	
+done:
+	free(buf);
+	free(singleLink);
+}
+
+void checkindirectblock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e){
+	uchar *singlelink = (uchar *)malloc(block_size);
+	if(cur->i_block[12] == 0){
+		printf("block 12 is 0 but numblock not zero\n");
+		goto done;
+	}
+	setBitmap(cur->i_block[12], bitmap);
+	readBlock(cur->i_block[12], singlelink, e);
+	size_t max = block_size / 4;
+	size_t i = 0;
+    while((*num) > 0 && i < max){
+		(*num) -= 1;
+		#ifdef DEBUG 
+		if(*(__u32 *)((void *)singlelink + i * 4) == 18511){
+			printf("this way\n");
+		}
+		#endif	
+		if(*(__u32 *)((void *)singlelink + i * 4) == 0){
+        	#ifdef DEBUG
+			printf("block 13 is 0 but numblock not zero\n");
+			#endif
+			i++;
+			//continue;
+			goto done;
+		}	
+        setBitmap(*(__u32 *)((void *)singlelink + i * 4) , bitmap);
+		i++;
+		//(*num) -= 1;	
+    }
+    if((*num) == 0){
+        return;
+    }
+
+	checkDoubleBlock(num, cur, bitmap, e, 13);
+done:
+	free(singlelink);
+	return;	
+}
+
+void checkDirectBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e){
+	size_t i = 0;
+	while((*num) > 0 && i < 12){
+		(*num) -= 1;
+        #ifdef DEBUG
+        if(cur->i_block[i] == 18511){
+            printf("this way\n");
+        }
+        #endif
+		if(cur->i_block[i] == 0){
+			#ifdef DEBUG
+			printf("It happensin direct block\n");
+			#endif
+			i++;
+			//continue;	
+			return;	
+		}
+		setBitmap(cur->i_block[i], bitmap);
+		i++;
+		//(*num) -= 1;
+	}
+	if((*num) == 0){
+		return;
+	}
+	checkindirectblock(num, cur, bitmap, e);	
+}
+
+void checkiNode(size_t i, uchar *bitmap,  partition *e){
+        ext2_inode cur = getSectorNumOfiNode(i, e);
+        if((cur.i_mode & 0xf000) == EXT2_S_IFLNK){
+            //continue;
+        }
+        if((cur.i_mode & 0xf000) == 0){
+            //continue;
+            //return;
+        }
+        int numBlocks = cur.i_blocks / (2 << sublk->s_log_block_size); 
+        checkDirectBlock(&numBlocks, &cur, bitmap, e);
+}
+
+void writeBitmap(uchar *bitmap, partition *e){
+	size_t i;
+	for(i = 0; i < 3; i++){
+         GroupDes groupDes;
+         readBlockGroupDes(i, &groupDes, e);
+         #ifdef DEBUG
+		 uchar firstmap[1024];
+		 readBlock(groupDes.bg_block_bitmap, firstmap, e);
+		 //checkBitmap(firstmap, (void *)bitmap + i, i);	
+		 #endif
+	     writeBlock(groupDes.bg_block_bitmap, (void *)bitmap + i, e);	
+	}
+}
+
+void checkDirTree(partition *e, uchar *bitmap, size_t i){
+	checkiNode(i, bitmap, e);
+	
+	ext2_inode inode = getSectorNumOfiNode(i, e);
+	if(isDirectory(inode.i_mode)){
+            size_t dataSize = 0;
+            uchar *singleLink = NULL;
+            size_t y;
+			for(y = 0; y < 13; y++){
+                if(inode.i_block[y] == 0){
+                    break;
+                }
+                if(y < 12){
+                    dataSize += block_size;
+                }else{
+                    singleLink = (uchar *)malloc(sizeof(uchar) * block_size);
+                    readBlock(inode.i_block[y], singleLink, e);
+                    size_t z;
+                    for(z = 0; z < block_size / 4; z++){
+                        if(*(__u32 *)(singleLink + z * 4) != 0){
+                            dataSize += block_size;
+                        }else{
+                            break;
+                        }
+                    }
+                }
+            }
+            if(inode.i_block[12] != 0){
+               //  printf("Yes. it matters\n");
+            }
+            if(dataSize == 0){
+              	return; 
+            }
+            uchar buf[dataSize];
+            for(y = 0; y < 13; y++){
+                if(inode.i_block[y] == 0){
+                     break;
+                }
+                if(y < 12){
+                    readBlock((size_t)inode.i_block[y], buf + y * block_size, e);
+                }else{
+                    if(singleLink != NULL){
+                         size_t z;
+                         for(z = 0; z < block_size / 4; z++){
+                             if(*(__u32 *)(singleLink + z * 4) != 0){
+                              readBlock(*(__u32 *)(singleLink + z * 4), buf + (z + y) * block_size, e);
+                            }else{
+                                break;
+                            }
+                         }
+                        free(singleLink);
+                    }
+                }
+            }
+
+            ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
+            size_t off = 0;
+            while(true){
+                if(off >= dataSize){
+                    break;
+                }
+                if(dir->inode == 0){
+                    break;
+                }
+                if(dir->rec_len == 0){
+                    break;
+                }
+				if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
+					checkDirTree(e, bitmap, dir->inode);
+				}
+				off += dir->rec_len;
+				dir = (ext2_dir_entry_2 *)(buf + off);
+			}
+	}	
+}
+
+void checkBlockBitmap(partition *e){
+    size_t totoalBlocks = sublk->s_blocks_count;
+    size_t blocksPerGroup = sublk->s_blocks_per_group;
+    size_t inodesPerGroup = sublk->s_inodes_per_group;
+	size_t i;
+
+	uchar bitmap[block_size * 3];
+	initGroupBitmap(bitmap);
+	size_t localGroup, localIndex;
+	checkDirTree(e, bitmap, 2);	
+	/*for(i = 2; i <= sublk->s_inodes_count; i++){	
+     size_t totoalBlocks = sublk->s_blocks_count;
+    size_t blocksPerGroup = sublk->s_blocks_per_group;
+    size_t inodesPerGroup = sublk->s_inodes_per_group;
+		size_t localGroup = (i - 1) / inodesPerGroup; 
+        size_t localIndex = (i - 1) % inodesPerGroup;	
+	
+        ext2_inode cur = getSectorNumOfiNode(i, e);
+        if((cur.i_mode & 0xf000) == EXT2_S_IFLNK){
+            continue;
+        }
+		if((cur.i_mode & 0xf000) == 0){
+			continue;
+		}
+		int numBlocks = cur.i_blocks / (2 << sublk->s_log_block_size); 
+		checkDirectBlock(&numBlocks, &cur, bitmap, e); 
+	}*/
+	writeBitmap(bitmap, e);	
+}
+
+/*void checkBlockBitmap(partition *e){
+	int preGroup = 0;
+	size_t totoalBlocks = sublk->s_blocks_count;
+	size_t blocksPerGroup = sublk->s_blocks_per_group;
+	size_t inodesPerGroup = sublk->s_inodes_per_group;
+	#ifdef DEBUG
+		printf("bpg %zu ipg %zu\n", blocksPerGroup, inodesPerGroup);
+		uchar firstmap[block_size];
+	#endif 
+	size_t localGroup;
+	size_t localIndex;	
+	uchar bitmap[block_size * 3];
+	initGroupBitmap(bitmap);
+	size_t i, y;
+	uchar cmap[8193];
+	memset(cmap, 0, 8193);	
+	for(i = 2; i <= sublk->s_inodes_count; i++){
+		localGroup = (i - 1) / inodesPerGroup; 
+		localIndex = (i - 1) % inodesPerGroup; 
+		if(localGroup > preGroup){
+			//write to disk
+			GroupDes groupDes;
+			readBlockGroupDes(preGroup, &groupDes, e);
+			#ifdef DEBUG
+			readBlock(groupDes.bg_block_bitmap, firstmap, e);
+			//checkBitmap(firstmap, bitmap);		
+			#endif	
+			writeBlock(groupDes.bg_block_bitmap, bitmap, e);		 
+			initGroupBitmap(bitmap);
+			preGroup = localGroup;
+		}
+		ext2_inode cur = getSectorNumOfiNode(i, e);
+		if((cur.i_mode & 0xf000) == EXT2_S_IFLNK){
+        	if(i == sublk->s_inodes_count){
+        	    GroupDes groupDes;
+           	    readBlockGroupDes(localGroup, &groupDes, e);
+            	writeBlock(groupDes.bg_block_bitmap, bitmap, e);
+        	}
+			continue;
+		}
+		unsigned int numBlocks = cur.i_blocks/(2 << sublk->s_log_block_size);	
+		for(y = 0; y < 15; y++){
+			#ifdef DEBUG
+			if(y >= 12 && (cur.i_block[y] != 0)){
+				//printf("inode %d %zuth block\n", i, y);
+			}
+			#endif
+			if(cur.i_block[y] != 0){
+				if(y <= 12){
+					size_t localBlockId = (cur.i_block[y] - 1) % blocksPerGroup;
+                	size_t bitbyte = localBlockId / 8;
+                	size_t bitoff = localBlockId % 8;
+					uchar target = bitmap[bitbyte];
+					//if(((target >> (7 - bitoff)) & 0x1) == 0){	
+					bitmap[bitbyte] = (target | (0x1 << (7 - bitoff)));
+					#ifdef DEBUG
+				//	cmap[cur.i_block[y] - 1] += 1;
+				//	printf("%zu ", cur.i_block[y]);
+					#endif	
+					numBlocks--;
+				}
+				if(y == 12){
+					uchar *singleLink = (uchar *)malloc(sizeof(uchar) * block_size);
+					readBlock(cur.i_block[y], singleLink, e);
+            		__u32 dblock[block_size / 4];
+					memcpy(dblock, singleLink, block_size);
+					size_t z;
+            		for(z = 0; z < block_size / 4; z++){
+                		//if(*(__u32 *)(singleLink + z * 4) != 0){
+						if(dblock[z] != 0){
+							size_t dId = dblock[z];// *(__u32 *)(singleLink + z * 4);
+	                        size_t localBlockId = (dId - 1) % blocksPerGroup;
+      		                size_t bitbyte = localBlockId / 8;
+             		        size_t bitoff = localBlockId % 8;
+                    		uchar target = bitmap[bitbyte];
+                    		bitmap[bitbyte] = (target | (0x1 << (7 - bitoff)));	
+			        #ifdef DEBUG
+                        //cmap[dId - 1] += 1;
+                       // printf("%zu ", dId);
+                    #endif
+						  numBlocks--;
+						}else{
+                    		break;
+                		}
+            		}	
+				free(singleLink);
+				}
+				if(y > 12){
+					printf("sfdsfdsfd");
+				}
+				if(numBlocks != 0){
+					 printf("%zu \n", numBlocks);
+				}
+			}else{
+				break;
+			}
+		}
+
+		if(i == sublk->s_inodes_count){
+            GroupDes groupDes;
+            readBlockGroupDes(localGroup, &groupDes, e);
+            writeBlock(groupDes.bg_block_bitmap, bitmap, e);
+		}	
+	}	
+}*/
+
+
 void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last, uchar *blockmap){
+
             ext2_inode inode;
             inode = getSectorNumOfiNode(inodeNum,  e);
 			bool isError = false;
             uchar y;
+			
+
 			for(y = 0; y < 15; y++){
                 if(inode.i_block[y] == 0){
                     break;
@@ -895,6 +1318,7 @@ void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last, 
 		        if(blockmap[blockId] == 0){
 					blockmap[blockId] += 1;
 				}
+				if(y < 12){
 				size_t inodesPerGourp = sublk->s_blocks_per_group;
        			size_t localGroup = (blockId - 1) / inodesPerGourp;
 		        GroupDes groupDes;
@@ -912,18 +1336,36 @@ void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last, 
                 	writeBlock(id, bitmap, e);
 					printf("yes\n");
 				}
-            }
-/*	}
-    size_t inodesPerGourp = sublk->s_inodes_per_group;
-    size_t localGroup = (inode - 1) / inodesPerGourp;
-	size_t lastGroup = (last - 1) / inodesPerGourp;
-	if(lastGroup == localGroup){
-		return;
+				}else if(y == 12){
+                    uchar *singleLink = (uchar *)malloc(sizeof(uchar) * block_size);
+                    readBlock(inode.i_block[y], singleLink, e);
+                    __u32 dblock[block_size / 4];
+                    memcpy(dblock, singleLink, block_size);
+                    size_t z;
+                    for(z = 0; z < block_size / 4; z++){
+                        if(dblock[z] != 0){
+                            size_t blockId = dblock[z];
+   				             size_t inodesPerGourp = sublk->s_blocks_per_group;
+               				 size_t localGroup = (blockId - 1) / inodesPerGourp;
+			                GroupDes groupDes;
+           				     readBlockGroupDes(localGroup, &groupDes, e);
+               				 size_t id = groupDes.bg_block_bitmap;
+          				      memset(bitmap, 0, block_size);
+                			readBlock(id, bitmap, e);
+                			size_t localIndex = (blockId - 1) % inodesPerGourp;
+                			size_t bitbyte = localIndex / 8;
+                			size_t bitoff = localIndex % 8;
+                			uchar target = bitmap[bitbyte];
+                				if(((target >> (7 - bitoff)) & 0x1) == 0){
+                    			printf("SkyDragon: block id %d unalloc  Fix?", id);
+		                    	bitmap[bitbyte] = (target | (0x1 << (7 - bitoff)));
+       	           			  	writeBlock(id, bitmap, e);
+                    			printf("yes\n");
+                			}
+						}
+					}
+            	}
 	}
-    GroupDes groupDes;
-    readBlockGroupDes(localGroup, &groupDes, e);
-    size_t blockId = groupDes.bg_inode_table;
-    readBlock(blockId, bitmap, e);		*/	
 }
 
 
@@ -981,7 +1423,7 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
 			readBlock(parentDir->i_block[y], singleLink, p);
 			size_t z;
 			for(z = 0; z < block_size / 4; z++){
-				if(*(size_t *)(singleLink) != 0){
+				if(*(__u32 *)(singleLink + z * 4) != 0){
 					dataSize += block_size;
 				}else{
 					break;
@@ -1003,8 +1445,8 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
               	if(singleLink != NULL){
               		 size_t z;
               		 for(z = 0; z < block_size / 4; z++){
-                  	    	 if(*(size_t *)(singleLink + z) != 0){
-                   	       	  readBlock(*(size_t *)(singleLink + z), buf + (z + y) * block_size, p); 
+                  	    	 if(*(__u32 *)(singleLink + z) != 0){
+                   	       	  readBlock(*(__u32 *)(singleLink + z), buf + (z + y) * block_size, p); 
              				}else{
 									break;
 							}
@@ -1052,5 +1494,5 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
 		 off += EXT2_DIR_REC_LEN(dir->name_len);
 		 pre = dir;
          dir = (ext2_dir_entry_2 *)((char *)buf + off);
-  }
+  	}
 }

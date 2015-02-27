@@ -105,4 +105,12 @@ void checkPartition(int partition, char *path, bool checkable);
 void checkDirectoryEntities(partition *e);
 bool checkUnreferenceNode(partition *e, size_t inodeNum, uchar *culmap, size_t *lostfound, bool first);
 void checkBlockBitmap(partition *e);
+
+void setBitmap(size_t blockId, uchar *bitmap);
+void initGroupBitmap(uchar *bitmap);
+void checkBitmap(uchar *map1, uchar *map2, int c);
+void checkDoubleBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e, int curIndex);
+void checkindirectblock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e);
+void checkDirectBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e);
+void writeBitmap(uchar *bitmap, partition *e);
 #endif
