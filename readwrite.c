@@ -199,27 +199,8 @@ int main (int argc, char **argv)
 				checkDirectoryEntitie(p);		 
          	    printf("------------------------------\n");
 			}
-		/*	if(i == ptren.count - 1){
-				p = ne->p;
-                setSuperBlockArguments(p);
-                checkDirectoryEntitie(p);
-			}*/
         	 ne = ne->next;
-    	}			
-
-/*		ne = ptren.p;
-		for(i = 0; i < ptren.count; i++){
-			if(i == ptren.count - 3){
-                p = ne->p;
-                setSuperBlockArguments(p);
-                checkDirectoryEntitie(p);
-			}
-			ne = ne->next;
-		}
-		ne = ptren.p;
-                p = ne->p;
-                setSuperBlockArguments(p);
-                checkDirectoryEntitie(p);	*/	
+    		}			
 	}else{
 	   		PTE *ext2 = readPartitionEntity(&ptren, ext2Num);
        		if(ext2 == NULL || ext2->p->sys_ind != 0x83){
@@ -724,9 +705,9 @@ ext2_inode getSectorNumofiNodeByName(char *name, partition *p){
 		printf("Error: cannot find lost+found\n");
 	}
 	size_t returnNode = EXT2_ROOT_INO;
-    ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
-    size_t off = 0;
-    while(true){
+	 ext2_dir_entry_2 *dir = (ext2_dir_entry_2 *)buf;
+	 size_t off = 0;
+   while(true){
         if(strcmp(dir->name, "lost+found") == 0){
 			 returnNode = dir->inode; 
 			 goto done;		
@@ -743,31 +724,27 @@ ext2_inode getSectorNumofiNodeByName(char *name, partition *p){
         off += dir->rec_len;
         dir = (ext2_dir_entry_2 *)((char *)dir + dir->rec_len);
     }
-		printf("Error: cannot find lost+found\n");
+ 	printf("Error: cannot find lost+found\n");
 done:
 	free(buf);
 	return getSectorNumOfiNode(returnNode , p);;  
 }
 
 size_t readiNodeBlocks(ext2_inode inode, uchar *buf, partition *p){
-            size_t dataSize = 0;
-            size_t y;
-            
-			for(y = 0; y < 12; y++){
-                if(inode.i_block[y] == 0){
+        size_t dataSize = 0;
+        size_t y;
+	for(y = 0; y < 12; y++){
+           if(inode.i_block[y] == 0){
                     break;
-                } 
-                dataSize += block_size;
-            }
-            if(inode.i_block[12] != 0){
-                 printf("Yes. it matters\n");
+            } 
+            dataSize += block_size;
             }
             if(dataSize == 0){
               	goto done; 
             }
-			buf = (uchar *)malloc(dataSize);
+            buf = (uchar *)malloc(dataSize);
             memset(buf, 0, dataSize);
-			for(y = 0; y < 12; y++){
+	    for(y = 0; y < 12; y++){
                 if(inode.i_block[y] == 0){
                      break;
                 }
@@ -786,9 +763,6 @@ ext2_inode getSectorNumOfiNode(size_t inode, partition *p){
 	size_t blockId = groupDes.bg_inode_table; 
 	ext2_inode i;
 	readiNode(blockId, localIndex, p, &i);
-	if(isDirectory(i.i_mode)){
-//	printf("111111------\n");
-	}
 	return i;
 }
 
@@ -812,10 +786,6 @@ void writeiNode(ext2_inode *i, size_t inode, partition *p){
 int findiNodeOfDirectory(uchar *name, ext2_dir_entry_2 *dir){
 	while(true){
 		if(dir->file_type == 2){ 
-			//char n[512];
-			//n = dir->name;
-			//memcpy(n, dir->name, dir->name_len);
-			//printf("%s\n", dir->name);
 			if(strcmp(dir->name, name) == 0){
 				return dir->inode;		
 			}
@@ -894,13 +864,11 @@ void initGroupBitmap(uchar *bitmap){
 void checkBitmap(uchar *map1, uchar *map2, int c){
 	size_t i;
 	for(i = 0; i < block_size * 8; i++){
-//		if(map1[i] != map2[i]){
-//			printf("[%zu]%x %x  ", i + c * 1024, map1[i], map2[i]);
-//		}
-                //size_t bitbyte = i / 8;
-              //size_t bitoff = localIndex % 8
+		if(map1[i] != map2[i]){
+			printf("[%zu]%x %x  ", i + c * 1024, map1[i], map2[i]);
+		}
 	}
-//	printf("\n");
+	printf("\n");
 }
 
 void setLongBitmap(size_t blockId, partition *e, ext2_inode *inode){
@@ -938,9 +906,9 @@ void checkDoubleBlock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e, i
     if(cur->i_block[curIndex] == 2137){
              printf("This is %zu\n", 2137);
     }
-	setLongBitmap(cur->i_block[curIndex], e, cur);
+    setLongBitmap(cur->i_block[curIndex], e, cur);
 	//setBitmap(cur->i_block[curIndex], bitmap);
-	readBlock(cur->i_block[curIndex], buf, e);
+    readBlock(cur->i_block[curIndex], buf, e);
     size_t max = block_size / 4;
     size_t i = 0;
     while((*num) > 0 && i < max){
@@ -1015,24 +983,24 @@ void checkindirectblock(int *num, ext2_inode *cur,  uchar *bitmap, partition *e)
 	size_t max = block_size / 4;
 	size_t i = 0;
     while((*num) > 0 && i < max){
-		(*num) -= 1;
-		#ifdef DEBUG 
-		if(*(__u32 *)((void *)singlelink + i * 4) == 2142){
-			printf("this way\n");
-		}
-		#endif	
-		if(*(__u32 *)((void *)singlelink + i * 4) == 0){
-        	#ifdef DEBUG
-		//	printf("block 13 is 0 but numblock not zero\n");
-			#endif
-			i++;
-			continue;
+	(*num) -= 1;
+	#ifdef DEBUG 
+	if(*(__u32 *)((void *)singlelink + i * 4) == 2142){
+		printf("this way\n");
+	}
+	#endif	
+	if(*(__u32 *)((void *)singlelink + i * 4) == 0){
+        #ifdef DEBUG
+		printf("block 13 is 0 but numblock not zero\n");
+	#endif
+	i++;
+	continue;
 			//goto done;
-		}
-		setLongBitmap(*(__u32 *)((void *)singlelink + i * 4), e, cur);	
+	}
+	etLongBitmap(*(__u32 *)((void *)singlelink + i * 4), e, cur);	
         setBitmap(*(__u32 *)((void *)singlelink + i * 4) , bitmap);
-		i++;
-		//(*num) -= 1;	
+	i++;
+	//(*num) -= 1;	
     }
     if((*num) == 0){
         return;
@@ -1107,7 +1075,7 @@ void checkDirTree(partition *e, uchar *bitmap, size_t i){
             size_t dataSize = 0;
             uchar *singleLink = NULL;
             size_t y;
-			for(y = 0; y < 13; y++){
+	for(y = 0; y < 13; y++){
                 if(inode.i_block[y] == 0){
                     break;
                 }
@@ -1125,9 +1093,6 @@ void checkDirTree(partition *e, uchar *bitmap, size_t i){
                         }
                     }
                 }
-            }
-            if(inode.i_block[12] != 0){
-               //  printf("Yes. it matters\n");
             }
             if(dataSize == 0){
               	return; 
@@ -1166,12 +1131,12 @@ void checkDirTree(partition *e, uchar *bitmap, size_t i){
                 if(dir->rec_len == 0){
                     break;
                 }
-				if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
-					checkDirTree(e, bitmap, dir->inode);
-				}
-				off += dir->rec_len;
-				dir = (ext2_dir_entry_2 *)(buf + off);
-			}
+		if(strcmp(dir->name, ".") != 0 && strcmp(dir->name, "..") != 0){
+			checkDirTree(e, bitmap, dir->inode);
+		}
+		off += dir->rec_len;
+		dir = (ext2_dir_entry_2 *)(buf + off);
+	}
 	}	
 }
 
@@ -1186,149 +1151,34 @@ void checkBlockBitmap(partition *e){
 	size_t localGroup, localIndex;
 	//checkDirTree(e, bitmap, 2);	
 	for(i = 2; i <= sublk->s_inodes_count; i++){	
-     size_t totoalBlocks = sublk->s_blocks_count;
-    size_t blocksPerGroup = sublk->s_blocks_per_group;
-    size_t inodesPerGroup = sublk->s_inodes_per_group;
+       		size_t totoalBlocks = sublk->s_blocks_count;
+    		size_t blocksPerGroup = sublk->s_blocks_per_group;
+    		size_t inodesPerGroup = sublk->s_inodes_per_group;
 		size_t localGroup = (i - 1) / inodesPerGroup; 
-        size_t localIndex = (i - 1) % inodesPerGroup;	
+		 size_t localIndex = (i - 1) % inodesPerGroup;	
 	
-        ext2_inode cur = getSectorNumOfiNode(i, e);
-        if((cur.i_mode & 0xf000) == EXT2_S_IFLNK){
-            continue;
-        }
+        	ext2_inode cur = getSectorNumOfiNode(i, e);
+        	if((cur.i_mode & 0xf000) == EXT2_S_IFLNK){
+            		continue;
+        	}
 		if((cur.i_mode & 0xf000) == 0){
 			continue;
 		}
 		int numBlocks = cur.i_blocks / (2 << sublk->s_log_block_size); 
 		checkDirectBlock(&numBlocks, &cur, bitmap, e); 
 	}
-
-	
-//	writeBitmap(bitmap, e);	
 }
-
-/*void checkBlockBitmap(partition *e){
-	int preGroup = 0;
-	size_t totoalBlocks = sublk->s_blocks_count;
-	size_t blocksPerGroup = sublk->s_blocks_per_group;
-	size_t inodesPerGroup = sublk->s_inodes_per_group;
-	#ifdef DEBUG
-		printf("bpg %zu ipg %zu\n", blocksPerGroup, inodesPerGroup);
-		uchar firstmap[block_size];
-	#endif 
-	size_t localGroup;
-	size_t localIndex;	
-	uchar bitmap[block_size * 3];
-	initGroupBitmap(bitmap);
-	size_t i, y;
-	uchar cmap[8193];
-	memset(cmap, 0, 8193);	
-	for(i = 2; i <= sublk->s_inodes_count; i++){
-		localGroup = (i - 1) / inodesPerGroup; 
-		localIndex = (i - 1) % inodesPerGroup; 
-		if(localGroup > preGroup){
-			//write to disk
-			GroupDes groupDes;
-			readBlockGroupDes(preGroup, &groupDes, e);
-			#ifdef DEBUG
-			readBlock(groupDes.bg_block_bitmap, firstmap, e);
-			//checkBitmap(firstmap, bitmap);		
-			#endif	
-			writeBlock(groupDes.bg_block_bitmap, bitmap, e);		 
-			initGroupBitmap(bitmap);
-			preGroup = localGroup;
-		}
-		ext2_inode cur = getSectorNumOfiNode(i, e);
-		if((cur.i_mode & 0xf000) == EXT2_S_IFLNK){
-        	if(i == sublk->s_inodes_count){
-        	    GroupDes groupDes;
-           	    readBlockGroupDes(localGroup, &groupDes, e);
-            	writeBlock(groupDes.bg_block_bitmap, bitmap, e);
-        	}
-			continue;
-		}
-		unsigned int numBlocks = cur.i_blocks/(2 << sublk->s_log_block_size);	
-		for(y = 0; y < 15; y++){
-			#ifdef DEBUG
-			if(y >= 12 && (cur.i_block[y] != 0)){
-				//printf("inode %d %zuth block\n", i, y);
-			}
-			#endif
-			if(cur.i_block[y] != 0){
-				if(y <= 12){
-					size_t localBlockId = (cur.i_block[y] - 1) % blocksPerGroup;
-                	size_t bitbyte = localBlockId / 8;
-                	size_t bitoff = localBlockId % 8;
-					uchar target = bitmap[bitbyte];
-					//if(((target >> (7 - bitoff)) & 0x1) == 0){	
-					bitmap[bitbyte] = (target | (0x1 << (7 - bitoff)));
-					#ifdef DEBUG
-				//	cmap[cur.i_block[y] - 1] += 1;
-				//	printf("%zu ", cur.i_block[y]);
-					#endif	
-					numBlocks--;
-				}
-				if(y == 12){
-					uchar *singleLink = (uchar *)malloc(sizeof(uchar) * block_size);
-					readBlock(cur.i_block[y], singleLink, e);
-            		__u32 dblock[block_size / 4];
-					memcpy(dblock, singleLink, block_size);
-					size_t z;
-            		for(z = 0; z < block_size / 4; z++){
-                		//if(*(__u32 *)(singleLink + z * 4) != 0){
-						if(dblock[z] != 0){
-							size_t dId = dblock[z];// *(__u32 *)(singleLink + z * 4);
-	                        size_t localBlockId = (dId - 1) % blocksPerGroup;
-      		                size_t bitbyte = localBlockId / 8;
-             		        size_t bitoff = localBlockId % 8;
-                    		uchar target = bitmap[bitbyte];
-                    		bitmap[bitbyte] = (target | (0x1 << (7 - bitoff)));	
-			        #ifdef DEBUG
-                        //cmap[dId - 1] += 1;
-                       // printf("%zu ", dId);
-                    #endif
-						  numBlocks--;
-						}else{
-                    		break;
-                		}
-            		}	
-				free(singleLink);
-				}
-				if(y > 12){
-					printf("sfdsfdsfd");
-				}
-				if(numBlocks != 0){
-					 printf("%zu \n", numBlocks);
-				}
-			}else{
-				break;
-			}
-		}
-
-		if(i == sublk->s_inodes_count){
-            GroupDes groupDes;
-            readBlockGroupDes(localGroup, &groupDes, e);
-            writeBlock(groupDes.bg_block_bitmap, bitmap, e);
-		}	
-	}	
-}*/
-
 
 void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last, uchar *blockmap){
 
-            ext2_inode inode;
-            inode = getSectorNumOfiNode(inodeNum,  e);
-			bool isError = false;
-            uchar y;
-			
-
-			for(y = 0; y < 15; y++){
+        ext2_inode inode;
+        inode = getSectorNumOfiNode(inodeNum,  e);
+	bool isError = false;
+        uchar y;
+	for(y = 0; y < 15; y++){
                 if(inode.i_block[y] == 0){
                     break;
                 }
-				if(inode.i_block[y] > sublk->s_blocks_count){
-					continue;	
-				}
                 size_t blockId = inode.i_block[y];
 				if(blockId == 2137){
 					printf("This is %zu\n", 2137);
@@ -1340,28 +1190,20 @@ void readiNodeBitmap(partition *e, uchar *bitmap, size_t inodeNum, size_t last, 
 				  if(inode.i_block[y]== 2137){
                     printf("This is %zu\n", 2137);
                    }
-				  //if(inode.i_block[12] == 0x83f){
-				//	 printf("This is this stuff\n"); 
-				 // }
-				 //	printf("%x\n", inode.i_block[12]);
                     setLongBitmap(inode.i_block[y], e, &inode);
-					readBlock(inode.i_block[y], singleLink, e);
-                   // __u32 dblock[block_size / 4];
+		    readBlock(inode.i_block[y], singleLink, e);
                     unsigned int  dblock[block_size / 4]; 
-					memcpy(dblock, singleLink, block_size);
+		    memcpy(dblock, singleLink, block_size);
                     size_t z;
                     for(z = 0; z < block_size / 4; z++){
                         if(dblock[z] != 0){
-				  			if(dblock[z] == 2137){
-                    			printf("This is %zu\n", 2137);
-               	 			}	
-							setLongBitmap(dblock[z], e, &inode);
-						}
-					}
+				setLongBitmap(dblock[z], e, &inode);
+			}
+		    }
             	}else if(y == 13){
-					int numBlocks = inode.i_blocks / (2 << sublk->s_log_block_size) - 12;
-					checkDoubleBlock(&numBlocks, &inode, NULL, e, 13);   
-				}
+			int numBlocks = inode.i_blocks / (2 << sublk->s_log_block_size) - 12;
+			checkDoubleBlock(&numBlocks, &inode, NULL, e, 13);   
+		}
 	}
 }
 
@@ -1402,7 +1244,6 @@ size_t IntLen(size_t x) {
 }
 
 void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
-	//size_t dataSize = readiNodeBlocks(*parentDir, buf, p);
 	// new method
 	ext2_inode temp = getSectorNumOfiNode(lostfoundNum, p);
 	ext2_inode *parentDir = &temp;
@@ -1437,7 +1278,7 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
        		 break;
 	    }
     	if(y < 12){
-			readBlock((size_t)parentDir->i_block[y], buf + y * block_size, p);
+		readBlock((size_t)parentDir->i_block[y], buf + y * block_size, p);
 		}else{
               	if(singleLink != NULL){
               		 size_t z;
@@ -1445,11 +1286,11 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
                   	    	 if(*(__u32 *)(singleLink + z) != 0){
                    	       	  readBlock(*(__u32 *)(singleLink + z), buf + (z + y) * block_size, p); 
              				}else{
-									break;
-							}
+						break;
+					}
          			}
 					free(singleLink);
-                }
+                	}
 		}
     }
 
@@ -1487,7 +1328,6 @@ void addDirEntry(size_t lostfoundNum, size_t lostInode, partition *p){
 			writeBlock(lost.i_block[0], lostbuf, p);					
 			break; 
 		  }
-//         off += dir->rec_len;
 		 off += EXT2_DIR_REC_LEN(dir->name_len);
 		 pre = dir;
          dir = (ext2_dir_entry_2 *)((char *)buf + off);
